@@ -7,7 +7,7 @@ use instruction::{Instruction, Instruction::*};
 use std::convert::TryFrom;
 use std::error::Error;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct State {
     /// 4KB = 4096 bytes of RAM.
     /// The first 512 bytes (0x000 to 0x1FF) are for the interpreter and not to be used.
@@ -61,6 +61,9 @@ fn run<'a>(state: &'a mut State, program: &[u16]) -> Result<&'a mut State, Box<d
         .collect::<Result<Vec<Instruction>, Box<dyn Error>>>()?;
     for instruction in instructions {
         match instruction {
+            SYS() => {
+                // Ignore it and do nothing
+            }
             JP(address) => {
                 // Jump to location nnn.
                 // The interpreter sets the program counter to nnn.
@@ -86,6 +89,14 @@ mod test {
     fn run_program(program: Vec<u16>) -> State {
         let mut state = State::new();
         run(&mut state, &program).unwrap().to_owned()
+    }
+
+    #[test]
+    fn sys_ignored() {
+        let mut state = State::new();
+        let program = vec![0x0ABC];
+        let new_state = run(&mut state, &program).unwrap().clone();
+        assert_eq!(state, new_state);
     }
 
     #[test]

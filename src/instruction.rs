@@ -37,7 +37,11 @@ impl PartialEq<u16> for Address {
 
 #[derive(Debug)]
 pub enum Instruction {
+    /// Ignored
+    SYS(),
+    // Jump to location nnn. The interpreter sets the program counter to nnn.
     JP(Address),
+    /// Set Vx = kk. The interpreter puts the value kk into register Vx.
     LD(u8, u8),
 }
 
@@ -50,12 +54,8 @@ impl TryFrom<&u16> for Instruction {
         let b: u8 = (chunk >> 8 & 0x000F).try_into()?;
 
         match a {
-            // 1nnn - JP addr
-            // Jump to location nnn. The interpreter sets the program counter to
-            // nnn.
+            0x0 => Ok(SYS()),
             0x1 => Ok(JP(nibble(&chunk).try_into()?)),
-            // 6xkk - LD Vx, byte
-            // Set Vx = kk. The interpreter puts the value kk into register Vx.
             0x6 => {
                 let value: u8 = (chunk & 0xFF).try_into()?;
                 Ok(LD(b, value))
