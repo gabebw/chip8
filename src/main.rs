@@ -7,6 +7,7 @@ use instruction::{Instruction, Instruction::*};
 use std::convert::TryFrom;
 use std::error::Error;
 
+#[derive(Clone, Debug)]
 struct State {
     /// 4KB = 4096 bytes of RAM.
     /// The first 512 bytes (0x000 to 0x1FF) are for the interpreter and not to be used.
@@ -82,19 +83,20 @@ mod test {
     #[allow(unused_imports)]
     use super::*;
 
+    fn run_program(program: Vec<u16>) -> State {
+        let mut state = State::new();
+        run(&mut state, &program).unwrap().to_owned()
+    }
+
     #[test]
     fn jp_addr() {
-        let mut state = State::new();
-        let program = vec![0x1BCD];
-        let new_state = run(&mut state, &program).unwrap();
+        let new_state = run_program(vec![0x1BCD]);
         assert_eq!(new_state.pc, 0xBCD);
     }
 
     #[test]
     fn ld_vx() {
-        let mut state = State::new();
-        let program = vec![0x6D12];
-        let new_state = run(&mut state, &program).unwrap();
+        let new_state = run_program(vec![0x6D12]);
         assert_eq!(new_state.registers.get(0xD).copied().unwrap(), 0x12);
     }
 }
