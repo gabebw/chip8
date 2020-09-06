@@ -1,7 +1,11 @@
 // Allow dead code for now, as it's being built.
 #![allow(dead_code)]
 
-use std::convert::TryInto;
+mod instruction;
+
+use instruction::{Instruction, Instruction::*};
+use std::convert::TryFrom;
+use std::error::Error;
 
 struct State {
     /// 4KB = 4096 bytes of RAM.
@@ -44,45 +48,28 @@ impl State {
     }
 
     /// Set the program counter to the given address.
-    /// The address is a 12-bit nibble, meaning that its maximum value is 0x0FFF,
-    /// not 0xFFFF as the u16 type implies.
     fn set_pc(&mut self, address: u16) {
-        assert!(address <= 0xFFF);
         self.pc = address;
     }
 }
 
-/// Given the value 0xABCD, return 0xBCD.
-/// A nibble is a 12-bit value.
-fn nibble(bytes: &u16) -> u16 {
-    bytes & 0x0FFF
-}
-
-fn run<'a>(
-    state: &'a mut State,
-    program: &[u16],
-) -> Result<&'a mut State, Box<dyn std::error::Error>> {
-    for chunk in program {
-        // Convert a 2-byte value in the format 0xABCD into 0xA and 0xB
-        let a: u8 = (chunk >> 12).try_into()?;
-        let b: u8 = (chunk >> 8 & 0x000F).try_into()?;
-
-        match a {
-            // 1nnn - JP addr
-            // Jump to location nnn.
-            // The interpreter sets the program counter to nnn.
-            0x1 => {
-                let nibble = nibble(chunk);
-                state.set_pc(nibble);
+fn run<'a>(state: &'a mut State, program: &[u16]) -> Result<&'a mut State, Box<dyn Error>> {
+    let instructions: Vec<Instruction> = program
+        .iter()
+        .map(Instruction::try_from)
+        .collect::<Result<Vec<Instruction>, Box<dyn Error>>>()?;
+    for instruction in instructions {
+        match instruction {
+            JP(address) => {
+                // Jump to location nnn.
+                // The interpreter sets the program counter to nnn.
+                state.set_pc(address.into());
             }
-            // 6xkk - LD Vx, byte
-            // Set Vx = kk.
-            // The interpreter puts the value kk into register Vx.
-            0x6 => {
-                let value: u8 = (chunk & 0xFF).try_into()?;
-                state.set_register(b, value);
+            LD(register, value) => {
+                // Set Vx = kk.
+                // The interpreter puts the value kk into register Vx.
+                state.set_register(register, value);
             }
-            _ => panic!("Instruction not supported: {:x}", chunk),
         }
     }
 
