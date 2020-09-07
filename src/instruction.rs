@@ -1,5 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 use std::error::Error;
+use std::fmt::{Display, Formatter};
 
 /// Given the value 0xABCD, return 0xBCD.
 /// A nibble is a 12-bit value.
@@ -61,6 +62,25 @@ pub enum Instruction {
     /// The interpreter increments the stack pointer, then puts the current PC on
     /// the top of the stack. The PC is then set to nnn.
     CALL(Address),
+
+    /// Until this program knows how to parse every CHIP-8 instruction, this
+    /// makes it possible to print out "unknown" (so far) instructions.
+    UNKNOWN(u16),
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use Instruction::*;
+
+        match self {
+            SYS() => write!(f, "SYS (ignored)"),
+            RET() => write!(f, "RET"),
+            JP(address) => write!(f, "JP {:02X}", address.0),
+            LD(register, value) => write!(f, "LD({:X}, {:02X})", register, value),
+            CALL(address) => write!(f, "CALL({:02X})", address.0),
+            UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
+        }
+    }
 }
 
 impl TryFrom<&u16> for Instruction {
@@ -82,7 +102,7 @@ impl TryFrom<&u16> for Instruction {
                 let value: u8 = (chunk & 0xFF).try_into()?;
                 LD(b, value)
             }
-            _ => panic!("Instruction not supported: {:x}", chunk),
+            _ => UNKNOWN(*chunk),
         };
         Ok(instruction)
     }

@@ -86,6 +86,9 @@ pub fn run<'a>(
                 // The interpreter puts the value kk into register Vx.
                 state.set_register(*register, *value);
             }
+            UNKNOWN(bytes) => {
+                panic!("Unknown instruction: {:04X}", bytes);
+            }
         }
     }
 
