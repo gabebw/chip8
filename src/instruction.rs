@@ -7,9 +7,15 @@ fn nibble(bytes: &u16) -> u16 {
     bytes & 0x0FFF
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 /// An Address is a 12-bit nibble stored in a u16.
 pub struct Address(u16);
+
+impl Address {
+    pub fn unwrapped(chunk: u16) -> Self {
+        Self::try_from(chunk).unwrap()
+    }
+}
 
 impl TryFrom<u16> for Address {
     type Error = Box<dyn Error>;
