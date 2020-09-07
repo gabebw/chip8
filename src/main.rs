@@ -2,9 +2,10 @@
 #![allow(dead_code)]
 
 mod instruction;
+mod parser;
 
-use instruction::{Instruction, Instruction::*};
-use std::convert::TryFrom;
+use instruction::Instruction::*;
+use parser::parse;
 use std::error::Error;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -71,10 +72,7 @@ impl State {
 }
 
 fn run<'a>(state: &'a mut State, program: &[u16]) -> Result<&'a mut State, Box<dyn Error>> {
-    let instructions: Vec<Instruction> = program
-        .iter()
-        .map(Instruction::try_from)
-        .collect::<Result<Vec<Instruction>, Box<dyn Error>>>()?;
+    let instructions = parse(program)?;
     for instruction in instructions {
         match instruction {
             SYS() => {

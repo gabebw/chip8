@@ -7,7 +7,7 @@ fn nibble(bytes: &u16) -> u16 {
     bytes & 0x0FFF
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 /// An Address is a 12-bit nibble stored in a u16.
 pub struct Address(u16);
 
@@ -35,7 +35,7 @@ impl PartialEq<u16> for Address {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     /// Ignored
     SYS(),
