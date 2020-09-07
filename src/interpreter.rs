@@ -1,5 +1,8 @@
 use crate::instruction::{Instruction, Instruction::*};
-use std::{convert::TryInto, error::Error};
+use std::{
+    convert::{TryFrom, TryInto},
+    error::Error,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
@@ -31,7 +34,26 @@ impl State {
             memory: vec![0; 4096],
             registers: vec![0; 16],
             i: 0,
-            pc: 0,
+            pc: 0x200,
+            sp: 0,
+            stack: vec![0; 16],
+        }
+    }
+
+    /// Create a new State with the given program.
+    pub fn with_program(program: &[u8]) -> Self {
+        // Program space is from 0x200 to 0xFFF.
+        assert!(program.len() <= (0xFFF - 0x200));
+
+        // Start with 0x200 empty bytes, then add the program at the end
+        let interpreter_area = &[0; 0x200];
+        let memory = [interpreter_area, program].concat();
+
+        Self {
+            memory,
+            registers: vec![0; 16],
+            i: 0,
+            pc: 0x200,
             sp: 0,
             stack: vec![0; 16],
         }
@@ -49,8 +71,8 @@ impl State {
 
     /// Increment the stack pointer and push a value onto the top of the stack.
     fn push_onto_stack(&mut self, value: u16) {
-        self.sp += 1;
         self.stack[self.sp as usize] = value;
+        self.sp += 1;
     }
 
     /// Decrement the stack pointer and return the value that it used to point to.
@@ -58,40 +80,90 @@ impl State {
         if self.sp == 0 {
             panic!("Cannot decrement stack pointer, already at 0");
         }
-        let value = self.stack[self.sp as usize];
         self.sp -= 1;
+        let value = self.stack[self.sp as usize];
         value
+    }
+
+    fn next_chunk(&self) -> Option<u16> {
+        let one = self.memory.get(self.pc as usize)?;
+        let two = self.memory.get((self.pc + 1) as usize)?;
+        Some(u16::from_be_bytes([*one, *two]))
     }
 }
 
-pub fn run<'a>(
+/// Run the entire program, forever.
+pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, Box<dyn Error>> {
+    while let Some(chunk) = state.next_chunk() {
+        // Advance by 2 bytes since 1 chunk is 2 bytes
+        state.pc += 2;
+        let instruction = Instruction::try_from(&chunk)?;
+        execute(state, &instruction, verbosely)?;
+    }
+    Ok(state)
+}
+
+// Do one thing in the interpreter (run one instruction) and return the changed state.
+// Useful for testing.
+fn tick<'a>(state: &'a mut State) -> Result<&'a mut State, Box<dyn Error>> {
+    let chunk = state.next_chunk().unwrap();
+    // Advance by 2 bytes since 1 chunk is 2 bytes
+    state.pc += 2;
+    let instruction = Instruction::try_from(&chunk)?;
+    execute(state, &instruction, false)?;
+    Ok(state)
+}
+
+/// Execute a single instruction and return the changed `State`.
+fn execute<'a>(
     state: &'a mut State,
-    instructions: &[Instruction],
+    instruction: &Instruction,
+    verbosely: bool,
 ) -> Result<&'a mut State, Box<dyn Error>> {
-    for instruction in instructions {
-        match instruction {
-            SYS() => {
-                // Ignore it and do nothing
-            }
-            RET() => state.pc = state.pop_off_stack(),
-            JP(address) => {
-                state.set_pc((*address).try_into()?);
-            }
-            CALL(address) => {
-                state.push_onto_stack(state.pc);
-                state.set_pc((*address).try_into()?);
-            }
-            LD(register, value) => {
-                // Set Vx = kk.
-                // The interpreter puts the value kk into register Vx.
-                state.set_register(*register, *value);
-            }
-            UNKNOWN(bytes) => {
-                panic!("Unknown instruction: {:04X}", bytes);
+    if verbosely {
+        println!("{}", instruction);
+    }
+    match instruction {
+        SYS() => {
+            if verbosely {
+                println!("\tIgnoring");
             }
         }
+        RET() => {
+            let old_pc = state.pc;
+            state.pc = state.pop_off_stack();
+            if verbosely {
+                println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
+            }
+        }
+        JP(address) => {
+            let old_pc = state.pc;
+            state.set_pc((*address).try_into()?);
+            if verbosely {
+                println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
+            }
+        }
+        CALL(address) => {
+            let old_pc = state.pc;
+            state.push_onto_stack(state.pc);
+            if verbosely {
+                println!("\tPushed pc ({:04X}) onto stack", state.pc);
+            }
+            state.set_pc((*address).try_into()?);
+            if verbosely {
+                println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
+            }
+        }
+        LD(register, value) => {
+            state.set_register(*register, *value);
+            if verbosely {
+                println!("\tSet register {:04X} to {:04X}", register, value);
+            }
+        }
+        UNKNOWN(bytes) => {
+            panic!("Unknown instruction: {:04X}", bytes);
+        }
     }
-
     Ok(state)
 }
 
@@ -101,41 +173,68 @@ mod test {
     #[allow(unused_imports)]
     use crate::instruction::Address;
 
-    fn run_program(program: Vec<Instruction>) -> State {
-        let mut state = State::new();
-        run(&mut state, &program).unwrap().to_owned()
+    // Build a program by inserting u16s (as u8s) at the given address and
+    // address+1, with everything else filled with zeroes.
+    // Note that the program space starts at 0x200, so instructions will be
+    // inserted at 0x200 + your address. This is especially important when
+    // testing JP/RET.
+    // For example: `build_program(vec![(0x300, 0x00EE)])` creates a program
+    // with a RET instruction filling the bytes at 0x500 and 0x501.
+    fn build_program(addresses_and_chunks: &[(usize, u16)]) -> Vec<u8> {
+        let mut program = vec![0; 0xFFF - 0x200];
+        addresses_and_chunks
+            .iter()
+            .copied()
+            .for_each(|(address, instruction)| {
+                let [b1, b2] = u16::to_be_bytes(instruction);
+                program[address] = b1;
+                program[address + 1] = b2;
+            });
+        program
+    }
+
+    fn build_state_with_program(addresses_and_chunks: &[(usize, u16)]) -> State {
+        State::with_program(&build_program(addresses_and_chunks))
     }
 
     #[test]
-    fn sys_ignored() {
-        let mut state = State::new();
-        let program = vec![SYS()];
-        let new_state = run(&mut state, &program).unwrap().clone();
-        assert_eq!(state, new_state);
+    fn sys_ignored_advances_pc() {
+        let mut state = build_state_with_program(&[(0, 0x0000)]);
+        tick(&mut state).unwrap();
+        assert_eq!(state.pc, 0x202);
     }
 
     #[test]
     fn call_subroutine_and_return() {
-        let program = vec![
-            JP(Address::unwrapped(0xABC)),   // Set PC to 0xABC
-            CALL(Address::unwrapped(0xBCD)), // Increment SP, put current PC on top of stack, set PC to BCD
-            CALL(Address::unwrapped(0xDEF)), // Increment SP, put current PC on top of stack, set PC to DEF
-            RET(),                           // Set PC to top of stack (BCD), substract 1 from SP
-        ];
-        let new_state = run_program(program);
-        assert_eq!(new_state.pc, 0xBCD);
-        assert_eq!(new_state.sp, 1);
+        let mut state = build_state_with_program(&[
+            // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
+            (0, 0x2300),
+            // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
+            (0x100, 0x6120),
+            // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
+            (0x102, 0x00EE),
+        ]);
+
+        for _ in 1..=3 {
+            tick(&mut state).unwrap();
+        }
+
+        assert_eq!(state.pc, 0x202);
+        assert_eq!(state.sp, 0);
+        assert_eq!(state.registers.get(0x1).copied().unwrap(), 0x20);
     }
 
     #[test]
     fn jp_addr() {
-        let new_state = run_program(vec![JP(Address::unwrapped(0xBCD))]);
-        assert_eq!(new_state.pc, 0xBCD);
+        let mut state = build_state_with_program(&[(0, 0x1BCD)]);
+        tick(&mut state).unwrap();
+        assert_eq!(state.pc, 0xBCD);
     }
 
     #[test]
     fn ld_vx() {
-        let new_state = run_program(vec![LD(0xD, 0x12)]);
-        assert_eq!(new_state.registers.get(0xD).copied().unwrap(), 0x12);
+        let mut state = build_state_with_program(&[(0, 0x6D12)]);
+        tick(&mut state).unwrap();
+        assert_eq!(state.registers.get(0xD).copied().unwrap(), 0x12);
     }
 }

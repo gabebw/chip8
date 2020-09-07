@@ -16,4 +16,9 @@ pub enum Subcommand {
         #[structopt(parse(from_os_str))]
         input_file_path: PathBuf,
     },
+    #[structopt(about = "Trace the execution flow")]
+    Trace {
+        #[structopt(parse(from_os_str))]
+        input_file_path: PathBuf,
+    },
 }
