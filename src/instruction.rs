@@ -63,6 +63,9 @@ pub enum Instruction {
     /// the top of the stack. The PC is then set to nnn.
     CALL(Address),
 
+    /// Set register I to nnn.
+    LDI(Address),
+
     /// Until this program knows how to parse every CHIP-8 instruction, this
     /// makes it possible to print out "unknown" (so far) instructions.
     UNKNOWN(u16),
@@ -76,11 +79,16 @@ impl Display for Instruction {
             SYS() => write!(f, "SYS (ignored)"),
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
-            LD(register, value) => write!(f, "LD({:X}, {:02X})", register, value),
-            CALL(address) => write!(f, "CALL({:02X})", address.0),
+            LD(register, value) => write!(f, "LD {:X}, {:02X}", register, value),
+            CALL(address) => write!(f, "CALL {:02X}", address.0),
+            LDI(address) => write!(f, "LD I, {:02X}", address.0),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
         }
     }
+}
+
+fn address(chunk: &u16) -> Result<Address, Box<dyn Error>> {
+    nibble(chunk).try_into()
 }
 
 impl TryFrom<&u16> for Instruction {
@@ -96,12 +104,13 @@ impl TryFrom<&u16> for Instruction {
                 0x00EE => RET(),
                 _ => SYS(),
             },
-            0x1 => JP(nibble(&chunk).try_into()?),
-            0x2 => CALL(nibble(&chunk).try_into()?),
+            0x1 => JP(address(&chunk)?),
+            0x2 => CALL(address(&chunk)?),
             0x6 => {
                 let value: u8 = (chunk & 0xFF).try_into()?;
                 LD(b, value)
             }
+            0xA => LDI(address(&chunk)?),
             _ => UNKNOWN(*chunk),
         };
         Ok(instruction)

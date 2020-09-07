@@ -160,6 +160,13 @@ fn execute<'a>(
                 println!("\tSet register {:04X} to {:04X}", register, value);
             }
         }
+        LDI(address) => {
+            let value = (*address).try_into()?;
+            state.i = value;
+            if verbosely {
+                println!("\tSet register I to {:04X}", value);
+            }
+        }
         UNKNOWN(bytes) => {
             panic!("Unknown instruction: {:04X}", bytes);
         }
@@ -236,5 +243,12 @@ mod test {
         let mut state = build_state_with_program(&[(0, 0x6D12)]);
         tick(&mut state).unwrap();
         assert_eq!(state.registers.get(0xD).copied().unwrap(), 0x12);
+    }
+
+    #[test]
+    fn ld_i() {
+        let mut state = build_state_with_program(&[(0, 0xA400)]);
+        tick(&mut state).unwrap();
+        assert_eq!(state.i, 0x400);
     }
 }
