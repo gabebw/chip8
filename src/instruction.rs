@@ -39,10 +39,22 @@ impl PartialEq<u16> for Address {
 pub enum Instruction {
     /// Ignored
     SYS(),
+
+    /// Return from a subroutine.
+    /// The interpreter sets the program counter to the address at the top of the
+    /// stack, then subtracts 1 from the stack pointer.
+    RET(),
+
     // Jump to location nnn. The interpreter sets the program counter to nnn.
     JP(Address),
+
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
     LD(u8, u8),
+
+    /// Call subroutine at nnn.
+    /// The interpreter increments the stack pointer, then puts the current PC on
+    /// the top of the stack. The PC is then set to nnn.
+    CALL(Address),
 }
 
 impl TryFrom<&u16> for Instruction {
@@ -53,14 +65,19 @@ impl TryFrom<&u16> for Instruction {
         let a: u8 = (chunk >> 12).try_into()?;
         let b: u8 = (chunk >> 8 & 0x000F).try_into()?;
 
-        match a {
-            0x0 => Ok(SYS()),
-            0x1 => Ok(JP(nibble(&chunk).try_into()?)),
+        let instruction = match a {
+            0x0 => match chunk {
+                0x00EE => RET(),
+                _ => SYS(),
+            },
+            0x1 => JP(nibble(&chunk).try_into()?),
+            0x2 => CALL(nibble(&chunk).try_into()?),
             0x6 => {
                 let value: u8 = (chunk & 0xFF).try_into()?;
-                Ok(LD(b, value))
+                LD(b, value)
             }
             _ => panic!("Instruction not supported: {:x}", chunk),
-        }
+        };
+        Ok(instruction)
     }
 }

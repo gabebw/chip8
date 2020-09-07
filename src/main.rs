@@ -52,6 +52,22 @@ impl State {
     fn set_pc(&mut self, address: u16) {
         self.pc = address;
     }
+
+    /// Increment the stack pointer and push a value onto the top of the stack.
+    fn push_onto_stack(&mut self, value: u16) {
+        self.sp += 1;
+        self.stack[self.sp as usize] = value;
+    }
+
+    /// Decrement the stack pointer and return the value that it used to point to.
+    fn pop_off_stack(&mut self) -> u16 {
+        if self.sp == 0 {
+            panic!("Cannot decrement stack pointer, already at 0");
+        }
+        let value = self.stack[self.sp as usize];
+        self.sp -= 1;
+        value
+    }
 }
 
 fn run<'a>(state: &'a mut State, program: &[u16]) -> Result<&'a mut State, Box<dyn Error>> {
@@ -64,9 +80,12 @@ fn run<'a>(state: &'a mut State, program: &[u16]) -> Result<&'a mut State, Box<d
             SYS() => {
                 // Ignore it and do nothing
             }
+            RET() => state.pc = state.pop_off_stack(),
             JP(address) => {
-                // Jump to location nnn.
-                // The interpreter sets the program counter to nnn.
+                state.set_pc(address.into());
+            }
+            CALL(address) => {
+                state.push_onto_stack(state.pc);
                 state.set_pc(address.into());
             }
             LD(register, value) => {
@@ -97,6 +116,19 @@ mod test {
         let program = vec![0x0ABC];
         let new_state = run(&mut state, &program).unwrap().clone();
         assert_eq!(state, new_state);
+    }
+
+    #[test]
+    fn call_subroutine_and_return() {
+        let program = vec![
+            0x1ABC, // Set PC to 0xABC
+            0x2BCD, // Increment SP, put current PC on top of stack, set PC to BCD
+            0x2DEF, // Increment SP, put current PC on top of stack, set PC to DEF
+            0x00EE, // Set PC to top of stack (BCD), substract 1 from SP
+        ];
+        let new_state = run_program(program);
+        assert_eq!(new_state.pc, 0xBCD);
+        assert_eq!(new_state.sp, 1);
     }
 
     #[test]
