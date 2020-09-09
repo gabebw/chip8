@@ -13,3 +13,4 @@ clap-verbosity-flag = "0.3.1"
 clap-log-flag = { path = "/Users/gabe/code/personal/clap-log-flag" }
 log = "0.4.11"
 env_logger = "0.7.1"
+minifb = "0.18.0"

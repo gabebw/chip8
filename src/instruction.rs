@@ -3,13 +3,12 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt::{Display, Formatter};
 
 /// Given the value 0xABCD, return 0xBCD.
-/// A nibble is a 12-bit value.
-fn nibble(bytes: &u16) -> u16 {
+fn last_3_bits(bytes: &u16) -> u16 {
     bytes & 0x0FFF
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-/// An Address is a 12-bit nibble stored in a u16.
+/// An Address is a 12-bit value stored in a u16.
 pub struct Address(u16);
 
 impl Address {
@@ -21,7 +20,7 @@ impl Address {
 impl TryFrom<u16> for Address {
     type Error = Chip8Error;
 
-    /// The address is a 12-bit nibble, meaning that its maximum value is 0x0FFF,
+    /// The address is a 12-bit value, meaning that its maximum value is 0x0FFF,
     /// not 0xFFFF as the u16 type implies.
     /// It will panic if passed a value larger than 0x0FFF.
     fn try_from(chunk: u16) -> Result<Self, Self::Error> {
@@ -69,6 +68,10 @@ pub enum Instruction {
     /// Set register I to nnn.
     LDI(Address),
 
+    /// DRW x, y, n
+    /// Display n-byte sprite starting at memory location I at (Vx, Vy).
+    DRW(u8, u8, u8),
+
     /// Until this program knows how to parse every CHIP-8 instruction, this
     /// makes it possible to print out "unknown" (so far) instructions.
     UNKNOWN(u16),
@@ -85,13 +88,21 @@ impl Display for Instruction {
             LD(register, value) => write!(f, "LD {:X}, {:02X}", register, value),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
+            DRW(x, y, n) => write!(f, "DRW V{:02X}, V{:02X}, {:02X}", x, y, n),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
         }
     }
 }
 
 fn address(chunk: &u16) -> Result<Address, Chip8Error> {
-    nibble(chunk).try_into()
+    last_3_bits(chunk).try_into()
+}
+
+/// Break a u8 like 0xAB into 0xA and 0xB
+fn nibbles(byte: u8) -> [u8; 2] {
+    let a: u8 = (byte >> 4).try_into().unwrap();
+    let b: u8 = (byte & 0x0F).try_into().unwrap();
+    [a, b]
 }
 
 impl TryFrom<&u16> for Instruction {
@@ -99,9 +110,10 @@ impl TryFrom<&u16> for Instruction {
 
     fn try_from(chunk: &u16) -> Result<Self, Self::Error> {
         use Instruction::*;
-        // Convert a 2-byte value in the format 0xABCD into 0xA and 0xB
-        let a: u8 = (chunk >> 12).try_into().unwrap();
-        let b: u8 = (chunk >> 8 & 0x000F).try_into().unwrap();
+        // Convert a 2-byte value in the format 0xABCD into 0xA, 0xB, 0xC, and 0xD
+        let [byte1, byte2] = u16::to_be_bytes(*chunk);
+        let [a, b] = nibbles(byte1);
+        let [c, d] = nibbles(byte2);
 
         let instruction = match a {
             0x0 => match chunk {
@@ -115,6 +127,7 @@ impl TryFrom<&u16> for Instruction {
                 LD(b, value)
             }
             0xA => LDI(address(&chunk)?),
+            0xD => DRW(b, c, d),
             _ => UNKNOWN(*chunk),
         };
         Ok(instruction)

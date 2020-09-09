@@ -1,5 +1,8 @@
 use crate::error::Chip8Error;
-use crate::instruction::{Instruction, Instruction::*};
+use crate::{
+    display::{Display, ScaledFramebuffer},
+    instruction::{Instruction, Instruction::*},
+};
 use std::convert::TryFrom;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -23,6 +26,9 @@ pub struct State {
     /// the interpreter should return to when finished with a subroutine.
     /// Chip-8 allows for up to 16 levels of nested subroutines.
     stack: Vec<u16>,
+
+    /// The framebuffer
+    buffer: ScaledFramebuffer,
 }
 
 impl State {
@@ -35,6 +41,7 @@ impl State {
             pc: 0x200,
             sp: 0,
             stack: vec![0; 16],
+            buffer: ScaledFramebuffer::new(),
         }
     }
 
@@ -54,6 +61,7 @@ impl State {
             pc: 0x200,
             sp: 0,
             stack: vec![0; 16],
+            buffer: ScaledFramebuffer::new(),
         }
     }
 
@@ -92,11 +100,25 @@ impl State {
 
 /// Run the entire program, forever.
 pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, Chip8Error> {
-    while let Some(chunk) = state.next_chunk() {
-        // Advance by 2 bytes since 1 chunk is 2 bytes
-        state.pc += 2;
-        let instruction = Instruction::try_from(&chunk)?;
-        execute(state, &instruction, verbosely)?;
+    let mut display = Display::new(state.buffer.true_width, state.buffer.true_height);
+    while display.is_running() {
+        match state.next_chunk() {
+            Some(chunk) => {
+                // Advance by 2 bytes since 1 chunk is 2 bytes
+                state.pc += 2;
+                let instruction = Instruction::try_from(&chunk)?;
+                execute(state, &instruction, verbosely)?;
+                display.draw(&mut state.buffer);
+
+                if let DRW(_, _, _) = instruction {
+                    // Show the thing we just drew because otherwise it
+                    // disappears immediately when the program panics on an
+                    // instruction it doesn't understand
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+            }
+            None => break,
+        }
     }
     Ok(state)
 }
@@ -163,6 +185,22 @@ fn execute<'a>(
             state.i = value;
             if verbosely {
                 println!("\tSet register I to {:04X}", value);
+            }
+        }
+        DRW(x, y, n) => {
+            let slice_start = state.i as usize;
+            let slice_end = slice_start + (*n as usize);
+            let sprite = &state.memory[slice_start..slice_end];
+            state
+                .buffer
+                .draw_sprite_at(*x as usize, *y as usize, sprite);
+            if verbosely {
+                let pretty_sprite = sprite
+                    .iter()
+                    .map(|byte| format!("\t{:08b}", byte))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                println!("\tSprite data:\n{}", pretty_sprite);
             }
         }
         UNKNOWN(bytes) => {

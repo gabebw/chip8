@@ -6,6 +6,7 @@
 extern crate log;
 
 mod cli;
+mod display;
 mod error;
 mod instruction;
 mod interpreter;
