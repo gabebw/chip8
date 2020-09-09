@@ -1,8 +1,6 @@
+use crate::error::Chip8Error;
 use crate::instruction::{Instruction, Instruction::*};
-use std::{
-    convert::{TryFrom, TryInto},
-    error::Error,
-};
+use std::convert::TryFrom;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
@@ -93,7 +91,7 @@ impl State {
 }
 
 /// Run the entire program, forever.
-pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, Box<dyn Error>> {
+pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, Chip8Error> {
     while let Some(chunk) = state.next_chunk() {
         // Advance by 2 bytes since 1 chunk is 2 bytes
         state.pc += 2;
@@ -105,7 +103,7 @@ pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, B
 
 // Do one thing in the interpreter (run one instruction) and return the changed state.
 // Useful for testing.
-fn tick<'a>(state: &'a mut State) -> Result<&'a mut State, Box<dyn Error>> {
+fn tick<'a>(state: &'a mut State) -> Result<&'a mut State, Chip8Error> {
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
     state.pc += 2;
@@ -119,7 +117,7 @@ fn execute<'a>(
     state: &'a mut State,
     instruction: &Instruction,
     verbosely: bool,
-) -> Result<&'a mut State, Box<dyn Error>> {
+) -> Result<&'a mut State, Chip8Error> {
     if verbosely {
         println!("{}", instruction);
     }
@@ -138,7 +136,7 @@ fn execute<'a>(
         }
         JP(address) => {
             let old_pc = state.pc;
-            state.set_pc((*address).try_into()?);
+            state.set_pc((*address).into());
             if verbosely {
                 println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
             }
@@ -149,7 +147,7 @@ fn execute<'a>(
             if verbosely {
                 println!("\tPushed pc ({:04X}) onto stack", state.pc);
             }
-            state.set_pc((*address).try_into()?);
+            state.set_pc((*address).into());
             if verbosely {
                 println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
             }
@@ -161,7 +159,7 @@ fn execute<'a>(
             }
         }
         LDI(address) => {
-            let value = (*address).try_into()?;
+            let value = (*address).into();
             state.i = value;
             if verbosely {
                 println!("\tSet register I to {:04X}", value);

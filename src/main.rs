@@ -2,15 +2,16 @@
 #![allow(dead_code)]
 
 mod cli;
+mod error;
 mod instruction;
 mod interpreter;
 mod parser;
 
 use cli::Subcommand::*;
+use error::Chip8Error;
 use instruction::Instruction;
 use interpreter::State;
 use itertools::Itertools;
-use std::error::Error;
 use std::{
     convert::TryInto,
     fs::File,
@@ -24,7 +25,7 @@ fn read_be_u16(input: &mut &[u8]) -> u16 {
     u16::from_be_bytes(int_bytes.try_into().unwrap())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Chip8Error> {
     let options = cli::Arguments::from_args();
     match options.subcommand {
         Print { input_file_path } => {

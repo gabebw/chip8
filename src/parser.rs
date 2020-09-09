@@ -1,8 +1,7 @@
-use crate::instruction::Instruction;
+use crate::{error::Chip8Error, instruction::Instruction};
 use std::convert::TryFrom;
-use std::error::Error;
 
-pub fn parse(program: &[u16]) -> Result<Vec<Instruction>, Box<dyn Error>> {
+pub fn parse(program: &[u16]) -> Result<Vec<Instruction>, Chip8Error> {
     program.iter().map(Instruction::try_from).collect()
 }
 

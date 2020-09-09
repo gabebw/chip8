@@ -1,5 +1,5 @@
+use crate::error::Chip8Error;
 use std::convert::{TryFrom, TryInto};
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 
 /// Given the value 0xABCD, return 0xBCD.
@@ -19,14 +19,17 @@ impl Address {
 }
 
 impl TryFrom<u16> for Address {
-    type Error = Box<dyn Error>;
+    type Error = Chip8Error;
 
     /// The address is a 12-bit nibble, meaning that its maximum value is 0x0FFF,
     /// not 0xFFFF as the u16 type implies.
     /// It will panic if passed a value larger than 0x0FFF.
     fn try_from(chunk: u16) -> Result<Self, Self::Error> {
-        assert!(chunk <= 0x0FFF);
-        Ok(Self(chunk))
+        if chunk > 0x0FFF {
+            Err(Chip8Error::NibbleTooLarge(chunk))
+        } else {
+            Ok(Self(chunk))
+        }
     }
 }
 
@@ -87,17 +90,18 @@ impl Display for Instruction {
     }
 }
 
-fn address(chunk: &u16) -> Result<Address, Box<dyn Error>> {
+fn address(chunk: &u16) -> Result<Address, Chip8Error> {
     nibble(chunk).try_into()
 }
 
 impl TryFrom<&u16> for Instruction {
-    type Error = Box<dyn Error>;
+    type Error = Chip8Error;
+
     fn try_from(chunk: &u16) -> Result<Self, Self::Error> {
         use Instruction::*;
         // Convert a 2-byte value in the format 0xABCD into 0xA and 0xB
-        let a: u8 = (chunk >> 12).try_into()?;
-        let b: u8 = (chunk >> 8 & 0x000F).try_into()?;
+        let a: u8 = (chunk >> 12).try_into().unwrap();
+        let b: u8 = (chunk >> 8 & 0x000F).try_into().unwrap();
 
         let instruction = match a {
             0x0 => match chunk {
@@ -107,7 +111,7 @@ impl TryFrom<&u16> for Instruction {
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
             0x6 => {
-                let value: u8 = (chunk & 0xFF).try_into()?;
+                let [_, value] = chunk.to_be_bytes();
                 LD(b, value)
             }
             0xA => LDI(address(&chunk)?),
