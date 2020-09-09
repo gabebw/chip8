@@ -1,6 +1,10 @@
 // Allow dead code for now, as it's being built.
 #![allow(dead_code)]
 
+#[allow(unused_imports)]
+#[macro_use]
+extern crate log;
+
 mod cli;
 mod error;
 mod instruction;
@@ -27,6 +31,9 @@ fn read_be_u16(input: &mut &[u8]) -> u16 {
 
 fn main() -> Result<(), Chip8Error> {
     let options = cli::Arguments::from_args();
+    let mut verbose = options.verbose;
+    cli::install_logger(&mut verbose);
+
     match options.subcommand {
         Print { input_file_path } => {
             let file = BufReader::new(File::open(input_file_path)?);
