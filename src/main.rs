@@ -15,7 +15,6 @@ use cli::Subcommand::*;
 use error::Chip8Error;
 use instruction::Instruction;
 use interpreter::State;
-use itertools::Itertools;
 use std::{
     convert::TryInto,
     fs::File,
@@ -38,8 +37,8 @@ fn main() -> Result<(), Chip8Error> {
         Print { input_file_path } => {
             let file = BufReader::new(File::open(input_file_path)?);
             let contents = file.bytes().collect::<Result<Vec<u8>, std::io::Error>>()?;
-            for multibytes in &contents.into_iter().chunks(2) {
-                let bytes = read_be_u16(&mut multibytes.collect::<Vec<u8>>().as_slice());
+            for mut multibytes in contents.as_slice().chunks_exact(2) {
+                let bytes = read_be_u16(&mut multibytes);
                 let instruction: Instruction = (&bytes).try_into()?;
                 println!("{:04X} => {}", bytes, instruction);
             }
