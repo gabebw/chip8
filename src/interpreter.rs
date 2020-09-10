@@ -3,6 +3,7 @@ use crate::{
     display::{Display, ScaledFramebuffer},
     instruction::{Instruction, Instruction::*},
 };
+use log::Level::Debug;
 use std::convert::TryFrom;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -115,6 +116,7 @@ pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, C
                 let instruction = Instruction::try_from(&chunk)?;
                 execute(state, &instruction, verbosely)?;
                 display.draw(&mut state.buffer);
+                trace!("{}", state.buffer.pretty_print());
 
                 if let DRW(_, _, _) = instruction {
                     // Show the thing we just drew because otherwise it
@@ -211,13 +213,17 @@ fn execute<'a>(
             state
                 .buffer
                 .draw_sprite_at(*x as usize, *y as usize, sprite);
-            if verbosely {
+            if verbosely || log_enabled!(Debug) {
                 let pretty_sprite = sprite
                     .iter()
                     .map(|byte| format!("\t{:08b}", byte))
                     .collect::<Vec<_>>()
                     .join("\n");
-                println!("\tSprite data:\n{}", pretty_sprite);
+                if verbosely {
+                    println!("\tSprite data:\n{}", pretty_sprite);
+                } else if log_enabled!(Debug) {
+                    debug!("\tSprite data:\n{}", pretty_sprite);
+                }
             }
         }
         UNKNOWN(bytes) => {

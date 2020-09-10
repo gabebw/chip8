@@ -1,4 +1,3 @@
-use log::Level::Debug;
 use minifb::{Key, Window, WindowOptions};
 use std::time::Duration;
 
@@ -45,10 +44,22 @@ impl ScaledFramebuffer {
         &self.buffer
     }
 
-    /// Flip a given pixel. If it's on, turn it off. If it's off, turn it on.
-    pub fn flip(&mut self, x: usize, y: usize) {
-        debug!("Flipping pixel at logical location ({}, {})", x, y);
+    /// XOR a given pixel at logical location (x, y) with the incoming input bit
+    /// (true = 1, false = 0).
+    /// If the input bit is 0, does nothing.
+    /// If the input bit is 1, flips the value at (x, y).
+    pub fn xor(&mut self, input_bit: bool, x: usize, y: usize) {
+        if input_bit == false {
+            debug!("xor ({}, {}): input is 0, not doing anything", x, y);
+            return;
+        }
 
+        // Only check one pixel and assume that all 100 pixels are the same (either all ON or all OFF)
+        if self.buffer[(SCALE * x) + (SCALE * y * self.true_width)] == ON {
+            debug!("xor ({}, {}): Flipping from ON to OFF", x, y);
+        } else {
+            debug!("xor ({}, {}): Flipping from OFF to ON", x, y);
+        }
         // Pixels are scaled by SCALE amount (e.g. 64x32 -> 640x320).
         // So we set SCALE pixels across and SCALE pixels down for each "pixel".
         for x_offset in 0..SCALE {
@@ -66,33 +77,25 @@ impl ScaledFramebuffer {
     }
 
     /// Pretty-print a grid of 1 (on) and 0 (off) that represents the screen.
-    fn pretty_print(&self) -> String {
+    pub fn pretty_print(&self) -> String {
         let mut result = vec![];
-        for row in self.buffer.chunks_exact(self.true_width) {
+        for (index, row) in self.buffer.chunks_exact(self.true_width).enumerate() {
             let column = row
                 .iter()
                 .map(|b| format!("{}", if b == &ON { 1 } else { 0 }))
                 .collect::<Vec<_>>();
-            result.push(column.join(" "));
+            result.push(format!("{} {}", index, column.join("")));
         }
         result.join("\n")
     }
 
-    /// Draw the given sprite at (x, y).
+    /// Draw the given sprite at logical location (x, y).
     /// The sprite is interpreted as a bit pattern with 0 = off and 1 = on.
     /// For example, these 3 bytes would draw a "0":
     /// 00111100
     /// 00100100
     /// 00111100
     pub fn draw_sprite_at(&mut self, x: usize, y: usize, sprite: &[u8]) {
-        if log_enabled!(Debug) {
-            let pretty_sprite = sprite
-                .iter()
-                .map(|b| format!("{:08b}", b))
-                .collect::<Vec<_>>()
-                .join("\n");
-            debug!("Sprite: {}", pretty_sprite);
-        }
         let bit_is_set = |byte: &u8, position: u8| ((byte & (1 << position)) >> position) == 1;
         for (y_offset, row) in sprite.iter().enumerate() {
             // Move left across the bits of the byte:
@@ -101,9 +104,8 @@ impl ScaledFramebuffer {
             // 11010001
             //  ^------
             for x_offset in 0..=7 {
-                if bit_is_set(row, (7 - x_offset) as u8) {
-                    self.flip(x + x_offset, y + y_offset);
-                }
+                let input_bit = bit_is_set(row, (7 - x_offset) as u8);
+                self.xor(input_bit, x + x_offset, y + y_offset);
             }
         }
     }
@@ -133,7 +135,7 @@ impl Display {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 
-    /// Draw the buffer to the screen.
+    /// Update the screen with the new buffer data.
     pub fn draw(&mut self, buffer: &ScaledFramebuffer) {
         self.window
             .update_with_buffer(buffer.as_bytes(), buffer.true_width, buffer.true_height)
@@ -207,5 +209,42 @@ mod test {
         // Check that some of the pixels that shouldn't be on, are not on
         assert_pixel(&fb, 4, 0, OFF);
         assert_pixel(&fb, 1, 1, OFF);
+    }
+
+    #[test]
+    fn draw_two_sprites() {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        let first_sprite = &[
+            0b11110000,
+            0b01000000,
+            0b11110000,
+            0b00000000,
+            0b00000000,
+        ];
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        let second_sprite = &[
+            0b11110000,
+            0b10000000,
+            0b11100000,
+            0b10000000,
+            0b11110000,
+        ];
+        let mut fb = ScaledFramebuffer::with_size(8, 5);
+        fb.draw_sprite_at(0, 0, first_sprite);
+        fb.draw_sprite_at(0, 0, second_sprite);
+
+        let expected = vec![
+            vec![OFF; 8],
+            vec![ON, ON, OFF, OFF, OFF, OFF, OFF, OFF],
+            vec![OFF, OFF, OFF, ON, OFF, OFF, OFF, OFF],
+            vec![ON, OFF, OFF, OFF, OFF, OFF, OFF, OFF],
+            vec![ON, ON, ON, ON, OFF, OFF, OFF, OFF],
+        ];
+
+        for (y, row) in expected.iter().enumerate() {
+            for (x, value) in row.iter().enumerate() {
+                assert_pixel(&fb, x, y, *value);
+            }
+        }
     }
 }
