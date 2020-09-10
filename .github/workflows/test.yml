@@ -1,0 +1,52 @@
+name: Tests
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#on
+on: pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+          components: rustfmt, clippy
+
+      - name: Install xkbcommon for minifb
+        run: sudo apt-get install libxkbcommon-x11-dev
+
+      - name: cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check
+
+      # This should be right before `cargo build` so it caches it
+      - name: Cache the build
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-v2-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-v2-
+
+      - name: cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose
+
+      - name: cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -Dwarnings
+
+      - name: cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose

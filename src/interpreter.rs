@@ -94,8 +94,7 @@ impl State {
             panic!("Cannot decrement stack pointer, already at 0");
         }
         self.sp -= 1;
-        let value = self.stack[self.sp as usize];
-        value
+        self.stack[self.sp as usize]
     }
 
     fn next_chunk(&self) -> Option<u16> {
@@ -106,7 +105,7 @@ impl State {
 }
 
 /// Run the entire program, forever.
-pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, Chip8Error> {
+pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error> {
     let mut display = Display::new(state.buffer.true_width, state.buffer.true_height);
     while display.is_running() {
         match state.next_chunk() {
@@ -115,7 +114,7 @@ pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, C
                 state.pc += 2;
                 let instruction = Instruction::try_from(&chunk)?;
                 execute(state, &instruction, verbosely)?;
-                display.draw(&mut state.buffer);
+                display.draw(&state.buffer);
                 trace!("{}", state.buffer.pretty_print());
 
                 if let DRW(_, _, _) = instruction {
@@ -133,7 +132,7 @@ pub fn run<'a>(state: &'a mut State, verbosely: bool) -> Result<&'a mut State, C
 
 // Do one thing in the interpreter (run one instruction) and return the changed state.
 // Useful for testing.
-fn tick<'a>(state: &'a mut State) -> Result<&'a mut State, Chip8Error> {
+fn tick(state: &mut State) -> Result<&mut State, Chip8Error> {
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
     state.pc += 2;

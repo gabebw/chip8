@@ -105,8 +105,8 @@ fn address(chunk: &u16) -> Result<Address, Chip8Error> {
 
 /// Break a u8 like 0xAB into 0xA and 0xB
 fn nibbles(byte: u8) -> [u8; 2] {
-    let a: u8 = (byte >> 4).try_into().unwrap();
-    let b: u8 = (byte & 0x0F).try_into().unwrap();
+    let a: u8 = byte >> 4;
+    let b: u8 = byte & 0x0F;
     [a, b]
 }
 

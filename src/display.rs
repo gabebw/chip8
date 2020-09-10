@@ -49,7 +49,7 @@ impl ScaledFramebuffer {
     /// If the input bit is 0, does nothing.
     /// If the input bit is 1, flips the value at (x, y).
     pub fn xor(&mut self, input_bit: bool, x: usize, y: usize) {
-        if input_bit == false {
+        if !input_bit {
             debug!("xor ({}, {}): input is 0, not doing anything", x, y);
             return;
         }
@@ -181,7 +181,7 @@ mod test {
 
     #[test]
     fn draw_sprite() {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let sprite = &[
             0b11110000,
             0b10010000,
@@ -213,7 +213,7 @@ mod test {
 
     #[test]
     fn draw_two_sprites() {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let first_sprite = &[
             0b11110000,
             0b01000000,
@@ -221,7 +221,7 @@ mod test {
             0b00000000,
             0b00000000,
         ];
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let second_sprite = &[
             0b11110000,
             0b10000000,

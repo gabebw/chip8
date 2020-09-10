@@ -5,12 +5,11 @@ authors = ["Gabe Berke-Williams <gabebw@gabebw.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 structopt = "0.3.17"
 thiserror = "1.0.20"
 clap-verbosity-flag = "0.3.1"
-clap-log-flag = { path = "/Users/gabe/code/personal/clap-log-flag" }
+clap-log-flag = { git = "https://github.com/gabebw/clap-log-flag", branch = "update-versions" }
 log = "0.4.11"
 env_logger = "0.7.1"
 minifb = "0.18.0"

@@ -139,6 +139,7 @@ dependencies = [
 [[package]]
 name = "clap-log-flag"
 version = "0.2.1"
+source = "git+https://github.com/gabebw/clap-log-flag?branch=update-versions#d736c2612b9feeb5165385e4cd8640dd5480bac2"
 dependencies = [
  "env_logger 0.5.13",
  "failure",
