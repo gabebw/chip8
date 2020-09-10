@@ -76,6 +76,10 @@ pub enum Instruction {
     /// Display n-byte sprite starting at memory location I at (Vx, Vy).
     DRW(u8, u8, u8),
 
+    // ADD I, Vx
+    // Set I = I + Vx.
+    ADDI(u8),
+
     /// Until this program knows how to parse every CHIP-8 instruction, this
     /// makes it possible to print out "unknown" (so far) instructions.
     UNKNOWN(u16),
@@ -90,10 +94,11 @@ impl Display for Instruction {
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
-            LD(register, value) => write!(f, "LD {:X}, {:02X}", register, value),
-            ADD(register, addend) => write!(f, "ADD {:X}, {:02X}", register, addend),
+            LD(register, value) => write!(f, "LD V{:X}, {:02X}", register, value),
+            ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register, addend),
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
-            DRW(x, y, n) => write!(f, "DRW V{:02X}, V{:02X}, {:02X}", x, y, n),
+            DRW(x, y, n) => write!(f, "DRW V{:X}, V{:X}, {:02X}", x, y, n),
+            ADDI(register) => write!(f, "ADD I, V{:X}", register),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
         }
     }
@@ -131,6 +136,7 @@ impl TryFrom<&u16> for Instruction {
             0x7 => ADD(b, byte2),
             0xA => LDI(address(&chunk)?),
             0xD => DRW(b, c, d),
+            0xF => ADDI(b),
             _ => UNKNOWN(*chunk),
         };
         Ok(instruction)

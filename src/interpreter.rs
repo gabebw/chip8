@@ -77,6 +77,11 @@ impl State {
         self.registers[register as usize]
     }
 
+    /// Increase I by the value in the given register.
+    fn increase_i(&mut self, register: &u8) {
+        self.i += self.get_register(*register) as u16;
+    }
+
     /// Set the program counter to the given address.
     fn set_pc(&mut self, address: u16) {
         self.pc = address;
@@ -184,7 +189,7 @@ fn execute<'a>(
         LD(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
-                println!("\tSet register {:04X} to {:04X}", register, value);
+                println!("\tSet register {:X} to {:02X}", register, value);
             }
         }
         ADD(register, addend) => {
@@ -223,6 +228,14 @@ fn execute<'a>(
                 } else if log_enabled!(Debug) {
                     debug!("\tSprite data:\n{}", pretty_sprite);
                 }
+            }
+        }
+        ADDI(register) => {
+            let old_value = state.i;
+            state.increase_i(register);
+            let new_value = state.i;
+            if verbosely {
+                println!("\tChanged I from {:02X} -> {:02X}", old_value, new_value);
             }
         }
         UNKNOWN(bytes) => {
