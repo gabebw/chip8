@@ -122,10 +122,7 @@ impl TryFrom<&u16> for Instruction {
             },
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
-            0x6 => {
-                let [_, value] = chunk.to_be_bytes();
-                LD(b, value)
-            }
+            0x6 => LD(b, byte2),
             0xA => LDI(address(&chunk)?),
             0xD => DRW(b, c, d),
             _ => UNKNOWN(*chunk),
