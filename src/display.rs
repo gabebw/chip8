@@ -163,7 +163,7 @@ mod test {
         let mut fb = ScaledFramebuffer::with_size(5, 5);
         let x = 2;
         let y = 2;
-        fb.flip(x, y);
+        fb.xor(true, x, y);
 
         assert_pixel(&fb, x, y, ON);
     }
@@ -173,8 +173,8 @@ mod test {
         let mut fb = ScaledFramebuffer::with_size(5, 5);
         let x = 2;
         let y = 2;
-        fb.flip(x, y);
-        fb.flip(x, y);
+        fb.xor(true, x, y);
+        fb.xor(true, x, y);
 
         assert_pixel(&fb, x, y, OFF);
     }
