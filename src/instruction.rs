@@ -57,13 +57,17 @@ pub enum Instruction {
     // Jump to location nnn. The interpreter sets the program counter to nnn.
     JP(Address),
 
-    /// Set Vx = kk. The interpreter puts the value kk into register Vx.
-    LD(u8, u8),
-
     /// Call subroutine at nnn.
     /// The interpreter increments the stack pointer, then puts the current PC on
     /// the top of the stack. The PC is then set to nnn.
     CALL(Address),
+
+    /// Set Vx = kk. The interpreter puts the value kk into register Vx.
+    LD(u8, u8),
+
+    /// Vx += kk
+    /// Adds the value kk to the value of register Vx, then stores the result in Vx.
+    ADD(u8, u8),
 
     /// Set register I to nnn.
     LDI(Address),
@@ -85,8 +89,9 @@ impl Display for Instruction {
             SYS() => write!(f, "SYS (ignored)"),
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
-            LD(register, value) => write!(f, "LD {:X}, {:02X}", register, value),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
+            LD(register, value) => write!(f, "LD {:X}, {:02X}", register, value),
+            ADD(register, addend) => write!(f, "ADD {:X}, {:02X}", register, addend),
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
             DRW(x, y, n) => write!(f, "DRW V{:02X}, V{:02X}, {:02X}", x, y, n),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
@@ -123,6 +128,7 @@ impl TryFrom<&u16> for Instruction {
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
             0x6 => LD(b, byte2),
+            0x7 => ADD(b, byte2),
             0xA => LDI(address(&chunk)?),
             0xD => DRW(b, c, d),
             _ => UNKNOWN(*chunk),

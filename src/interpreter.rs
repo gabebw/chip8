@@ -70,6 +70,12 @@ impl State {
         self.registers[register as usize] = value;
     }
 
+    /// Get the value in the given register.
+    fn get_register(&mut self, register: u8) -> u8 {
+        assert!(register <= 0xF);
+        self.registers[register as usize]
+    }
+
     /// Set the program counter to the given address.
     fn set_pc(&mut self, address: u16) {
         self.pc = address;
@@ -180,6 +186,17 @@ fn execute<'a>(
                 println!("\tSet register {:04X} to {:04X}", register, value);
             }
         }
+        ADD(register, addend) => {
+            let old_value = state.get_register(*register);
+            state.set_register(*register, addend + old_value);
+            if verbosely {
+                println!(
+                    "\tChanged register from {:04X} -> {:04X}",
+                    old_value,
+                    addend + old_value
+                );
+            }
+        }
         LDI(address) => {
             let value = (*address).into();
             state.i = value;
@@ -278,7 +295,7 @@ mod test {
     fn ld_vx() {
         let mut state = build_state_with_program(&[(0, 0x6D12)]);
         tick(&mut state).unwrap();
-        assert_eq!(state.registers.get(0xD).copied().unwrap(), 0x12);
+        assert_eq!(state.get_register(0xD), 0x12);
     }
 
     #[test]
@@ -286,5 +303,13 @@ mod test {
         let mut state = build_state_with_program(&[(0, 0xA400)]);
         tick(&mut state).unwrap();
         assert_eq!(state.i, 0x400);
+    }
+
+    #[test]
+    fn add() {
+        let mut state = build_state_with_program(&[(0, 0x6D12), (2, 0x7D12)]);
+        tick(&mut state).unwrap();
+        tick(&mut state).unwrap();
+        assert_eq!(state.get_register(0xD), 0x24);
     }
 }
