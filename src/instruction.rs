@@ -65,6 +65,9 @@ pub enum Instruction {
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
     LD(u8, u8),
 
+    /// Skip next instruction if Vx == kk.
+    SNE(u8, u8),
+
     /// Vx += kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx.
     ADD(u8, u8),
@@ -94,6 +97,7 @@ impl Display for Instruction {
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
+            SNE(register, byte) => write!(f, "SNE V{:X}, {:02X}", register, byte),
             LD(register, value) => write!(f, "LD V{:X}, {:02X}", register, value),
             ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register, addend),
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
@@ -132,6 +136,7 @@ impl TryFrom<&u16> for Instruction {
             },
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
+            0x4 => SNE(b, byte2),
             0x6 => LD(b, byte2),
             0x7 => ADD(b, byte2),
             0xA => LDI(address(&chunk)?),

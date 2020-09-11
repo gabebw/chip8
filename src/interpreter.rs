@@ -186,10 +186,24 @@ fn execute<'a>(
                 println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
             }
         }
+        SNE(register, byte) => {
+            let register_value = state.get_register(*register);
+            if register_value == *byte {
+                state.pc += 2;
+                if verbosely {
+                    println!("\tSkipping ahead, V{:X} == {:02X}", register, byte);
+                }
+            } else if verbosely {
+                println!(
+                    "\tNot skipping, V{:X} is {:02X} (not {:02X})",
+                    register, register_value, byte
+                );
+            }
+        }
         LD(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
-                println!("\tSet register {:X} to {:02X}", register, value);
+                println!("\tSet register V{:X} to {:02X}", register, value);
             }
         }
         ADD(register, addend) => {
@@ -197,7 +211,8 @@ fn execute<'a>(
             state.set_register(*register, addend + old_value);
             if verbosely {
                 println!(
-                    "\tChanged register from {:04X} -> {:04X}",
+                    "\tChanged register V{:X} from {:04X} -> {:04X}",
+                    register,
                     old_value,
                     addend + old_value
                 );
