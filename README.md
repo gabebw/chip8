@@ -9,6 +9,7 @@ one](https://johnearnest.github.io/chip8Archive/roms/octojam1title.ch8)):
 
     chip8 print FILE.ch8
 
-Or to run it locally:
+To run the program, with helpful statements indicating what instructions it's
+executing:
 
-    cargo run -- print FILE.ch8
+    chip8 trace FILE.ch8
