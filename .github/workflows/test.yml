@@ -1,6 +1,12 @@
 name: Tests
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#on
-on: pull_request
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 jobs:
   build:
     runs-on: ubuntu-latest
