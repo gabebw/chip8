@@ -65,7 +65,7 @@ pub enum Instruction {
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
     LD(u8, u8),
 
-    /// Skip next instruction if Vx == kk.
+    /// Skip next instruction if Vx != kk.
     SNE(u8, u8),
 
     /// Vx += kk

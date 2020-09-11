@@ -188,14 +188,14 @@ fn execute<'a>(
         }
         SNE(register, byte) => {
             let register_value = state.get_register(*register);
-            if register_value == *byte {
+            if register_value != *byte {
                 state.pc += 2;
                 if verbosely {
-                    println!("\tSkipping ahead, V{:X} == {:02X}", register, byte);
+                    println!("\tSkipping ahead, V{:X} != {:02X}", register, byte);
                 }
             } else if verbosely {
                 println!(
-                    "\tNot skipping, V{:X} is {:02X} (not {:02X})",
+                    "\tNot skipping, V{:X} is {:02X} (would skip if it were not {:02X})",
                     register, register_value, byte
                 );
             }
@@ -344,5 +344,23 @@ mod test {
         tick(&mut state).unwrap();
         tick(&mut state).unwrap();
         assert_eq!(state.get_register(0xD), 0x24);
+    }
+
+    #[test]
+    fn sne() {
+        let mut state = build_state_with_program(&[
+            // LD D, 12
+            (0, 0x6D12),
+            // SNE D, 00
+            (2, 0x4D00),
+            // This should be skipped
+            (4, 0x6100),
+            // LD 1, FF (should run)
+            (6, 0x61FF),
+        ]);
+        for _ in 0..3 {
+            tick(&mut state).unwrap();
+        }
+        assert_eq!(state.get_register(0x1), 0xFF);
     }
 }
