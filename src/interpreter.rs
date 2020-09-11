@@ -186,6 +186,20 @@ fn execute<'a>(
                 println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
             }
         }
+        SE(register, byte) => {
+            let register_value = state.get_register(*register);
+            if register_value == *byte {
+                state.pc += 2;
+                if verbosely {
+                    println!("\tSkipping ahead, V{:X} == {:02X}", register, byte);
+                }
+            } else if verbosely {
+                println!(
+                    "\tNot skipping, V{:X} is {:02X} (would skip if it were {:02X})",
+                    register, register_value, byte
+                );
+            }
+        }
         SNE(register, byte) => {
             let register_value = state.get_register(*register);
             if register_value != *byte {
@@ -356,6 +370,24 @@ mod test {
             // This should be skipped
             (4, 0x6100),
             // LD 1, FF (should run)
+            (6, 0x61FF),
+        ]);
+        for _ in 0..3 {
+            tick(&mut state).unwrap();
+        }
+        assert_eq!(state.get_register(0x1), 0xFF);
+    }
+
+    #[test]
+    fn se() {
+        let mut state = build_state_with_program(&[
+            // LD D, 12
+            (0, 0x6D12),
+            // SE D, 12
+            (2, 0x3D12),
+            // LD 1, 00 (this should be skipped)
+            (4, 0x6100),
+            // LD 1, FF (this should run)
             (6, 0x61FF),
         ]);
         for _ in 0..3 {
