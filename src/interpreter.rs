@@ -275,10 +275,16 @@ fn execute<'a>(
 }
 
 mod test {
+    use std::convert::TryInto;
+
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
     use crate::instruction::Address;
+
+    fn addr(n: u16) -> Address {
+        n.try_into().unwrap()
+    }
 
     // Build a program by inserting u16s (as u8s) at the given address and
     // address+1, with everything else filled with zeroes.
@@ -306,7 +312,7 @@ mod test {
 
     #[test]
     fn sys_ignored_advances_pc() {
-        let mut state = build_state_with_program(&[(0, 0x0000)]);
+        let mut state = build_state_with_program(&[(0, SYS().into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.pc, 0x202);
     }
@@ -315,11 +321,11 @@ mod test {
     fn call_subroutine_and_return() {
         let mut state = build_state_with_program(&[
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
-            (0, 0x2300),
+            (0, CALL(addr(0x300)).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
-            (0x100, 0x6120),
+            (0x100, LD(0x1, 0x20).into()),
             // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
-            (0x102, 0x00EE),
+            (0x102, RET().into()),
         ]);
 
         for _ in 1..=3 {
@@ -328,33 +334,38 @@ mod test {
 
         assert_eq!(state.pc, 0x202);
         assert_eq!(state.sp, 0);
-        assert_eq!(state.registers.get(0x1).copied().unwrap(), 0x20);
+        assert_eq!(state.get_register(0x1), 0x20);
     }
 
     #[test]
     fn jp_addr() {
-        let mut state = build_state_with_program(&[(0, 0x1BCD)]);
+        let mut state = build_state_with_program(&[(0, JP(addr(0xBCD)).into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.pc, 0xBCD);
     }
 
     #[test]
     fn ld_vx() {
-        let mut state = build_state_with_program(&[(0, 0x6D12)]);
+        let mut state = build_state_with_program(&[(0, LD(0xD, 0x12).into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.get_register(0xD), 0x12);
     }
 
     #[test]
     fn ld_i() {
-        let mut state = build_state_with_program(&[(0, 0xA400)]);
+        let mut state = build_state_with_program(&[(0, LDI(addr(0x400)).into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.i, 0x400);
     }
 
     #[test]
     fn add() {
-        let mut state = build_state_with_program(&[(0, 0x6D12), (2, 0x7D12)]);
+        #[rustfmt::skip]
+        let mut state =
+            build_state_with_program(&[
+                (0, LD(0xD, 0x12).into()),
+                (2, ADD(0xD, 0x12).into())
+            ]);
         tick(&mut state).unwrap();
         tick(&mut state).unwrap();
         assert_eq!(state.get_register(0xD), 0x24);
@@ -363,14 +374,12 @@ mod test {
     #[test]
     fn sne() {
         let mut state = build_state_with_program(&[
-            // LD D, 12
-            (0, 0x6D12),
-            // SNE D, 00
-            (2, 0x4D00),
+            (0, LD(0xD, 0x12).into()),
+            (2, SNE(0xD, 0x00).into()),
             // This should be skipped
-            (4, 0x6100),
-            // LD 1, FF (should run)
-            (6, 0x61FF),
+            (4, LD(0x1, 0x00).into()),
+            // This one should run
+            (6, LD(0x1, 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state).unwrap();
@@ -381,14 +390,12 @@ mod test {
     #[test]
     fn se() {
         let mut state = build_state_with_program(&[
-            // LD D, 12
-            (0, 0x6D12),
-            // SE D, 12
-            (2, 0x3D12),
-            // LD 1, 00 (this should be skipped)
-            (4, 0x6100),
-            // LD 1, FF (this should run)
-            (6, 0x61FF),
+            (0, LD(0xD, 0x12).into()),
+            (2, SE(0xD, 0x12).into()),
+            // This should be skipped
+            (4, LD(0x1, 0x00).into()),
+            // This one should run
+            (6, LD(0x1, 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state).unwrap();

@@ -62,14 +62,14 @@ pub enum Instruction {
     /// the top of the stack. The PC is then set to nnn.
     CALL(Address),
 
-    /// Set Vx = kk. The interpreter puts the value kk into register Vx.
-    LD(u8, u8),
-
     /// Skip next instruction if Vx == kk.
     SE(u8, u8),
 
     /// Skip next instruction if Vx != kk.
     SNE(u8, u8),
+
+    /// Set Vx = kk. The interpreter puts the value kk into register Vx.
+    LD(u8, u8),
 
     /// Vx += kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx.
@@ -150,5 +150,106 @@ impl TryFrom<&u16> for Instruction {
             _ => UNKNOWN(*chunk),
         };
         Ok(instruction)
+    }
+}
+
+impl Into<u16> for Instruction {
+    fn into(self) -> u16 {
+        use Instruction::*;
+
+        // Yes, it's not actually tens/hundreds/thousands places since we're in
+        // hexadecimal, but it's a helpful idea.
+        let tens = |n: u8| u16::from(n) * 0x10;
+        let hundreds = |n: u8| u16::from(n) * 0x100;
+
+        match self {
+            // Since SYS is technically any 0nnn opcode that's not 00E0 or 00EE,
+            // just pick something that's not used by anything else.
+            SYS() => 0x0123,
+            RET() => 0x00EE,
+            JP(address) => 0x1000 + address.0,
+            CALL(address) => 0x2000 + address.0,
+            SE(register, byte) => 0x3000 + hundreds(register) + u16::from(byte),
+            SNE(register, byte) => 0x4000 + hundreds(register) + u16::from(byte),
+            LD(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
+            ADD(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
+            LDI(address) => 0xA000 + address.0,
+            DRW(x, y, n) => 0xD000 + hundreds(x) + tens(y) + u16::from(n),
+            ADDI(register) => 0xF000 + hundreds(register) + 0x1E,
+            UNKNOWN(bytes) => bytes,
+        }
+    }
+}
+
+mod test {
+    #[allow(unused_imports)]
+    use super::{Instruction::*, *};
+    #[allow(unused_imports)]
+    use std::convert::TryInto;
+
+    // This helper function exists so that we don't have to inline an ugly
+    // `Into::<u16>::into(instruction)` into all the other tests. The return
+    // type on this function gives `into()` the information it needs.
+    fn into_u16(i: Instruction) -> u16 {
+        i.into()
+    }
+
+    fn addr(n: u16) -> Address {
+        n.try_into().unwrap()
+    }
+
+    #[test]
+    fn as_u16_ret() {
+        assert_eq!(into_u16(RET()), 0x00EE)
+    }
+
+    #[test]
+    fn as_u16_sys() {
+        assert_eq!(into_u16(SYS()), 0x0123)
+    }
+
+    #[test]
+    fn as_u16_jp() {
+        assert_eq!(into_u16(JP(addr(0x234))), 0x1234)
+    }
+
+    #[test]
+    fn as_u16_call() {
+        assert_eq!(into_u16(CALL(addr(0x345))), 0x2345)
+    }
+
+    #[test]
+    fn as_u16_se() {
+        assert_eq!(into_u16(SE(0x4, 0x56)), 0x3456)
+    }
+
+    #[test]
+    fn as_u16_sne() {
+        assert_eq!(into_u16(SNE(0x5, 0x67)), 0x4567)
+    }
+
+    #[test]
+    fn as_u16_ld() {
+        assert_eq!(into_u16(LD(0x7, 0x89)), 0x6789);
+    }
+
+    #[test]
+    fn as_u16_add() {
+        assert_eq!(into_u16(ADD(0x8, 0x9A)), 0x789A)
+    }
+
+    #[test]
+    fn as_u16_ldi() {
+        assert_eq!(into_u16(LDI(addr(0xBCD))), 0xABCD)
+    }
+
+    #[test]
+    fn as_u16_drw() {
+        assert_eq!(into_u16(DRW(0xA, 0xB, 0xC)), 0xDABC)
+    }
+
+    #[test]
+    fn as_u16_addi() {
+        assert_eq!(into_u16(ADDI(0xB)), 0xFB1E)
     }
 }
