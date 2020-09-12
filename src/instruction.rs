@@ -44,7 +44,7 @@ impl PartialEq<u16> for Address {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Instruction {
     /// Ignored
     SYS(),
@@ -251,5 +251,32 @@ mod test {
     #[test]
     fn as_u16_addi() {
         assert_eq!(into_u16(ADDI(0xB)), 0xFB1E)
+    }
+
+    #[test]
+    fn from_u16() {
+        use super::Instruction::*;
+        use std::collections::HashMap;
+        use std::convert::TryInto;
+
+        #[rustfmt::skip]
+        let instructions: HashMap<u16, Instruction> = [
+            (0x00EE, RET()),
+            (0x0ABC, SYS()),
+            (0x1A12, JP(0xA12.try_into().unwrap())),
+            (0x221A, CALL(0x21A.try_into().unwrap())),
+            (0x3934, SE(0x9, 0x34)),
+            (0x4A56, SNE(0xA, 0x56)),
+            (0x6003, LD(0x0, 0x03.try_into().unwrap())),
+            (0x7123, ADD(0x1, 0x23)),
+            (0xA278, LDI(0x278.try_into().unwrap())),
+            (0xD123, DRW(0x1, 0x2, 0x3)),
+            (0xF51E, ADDI(0x5))
+        ].iter().cloned().collect();
+
+        for (chunk, instruction) in instructions.into_iter() {
+            let actual = Instruction::try_from(&chunk).unwrap();
+            assert_eq!(actual, instruction);
+        }
     }
 }

@@ -10,7 +10,6 @@ mod display;
 mod error;
 mod instruction;
 mod interpreter;
-mod parser;
 
 use cli::Subcommand::*;
 use error::Chip8Error;
