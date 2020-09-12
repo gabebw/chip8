@@ -184,8 +184,6 @@ impl Into<u16> for Instruction {
 mod test {
     #[allow(unused_imports)]
     use super::{Instruction::*, *};
-    #[allow(unused_imports)]
-    use std::convert::TryInto;
 
     // This helper function exists so that we don't have to inline an ugly
     // `Into::<u16>::into(instruction)` into all the other tests. The return
@@ -255,9 +253,7 @@ mod test {
 
     #[test]
     fn from_u16() {
-        use super::Instruction::*;
         use std::collections::HashMap;
-        use std::convert::TryInto;
 
         #[rustfmt::skip]
         let instructions: HashMap<u16, Instruction> = [
