@@ -242,13 +242,13 @@ fn execute<'a>(
                 );
             }
         }
-        DRW(x, y, n) => {
+        DRW(register_x, register_y, n) => {
+            let x = state.get_register(*register_x);
+            let y = state.get_register(*register_y);
             let slice_start = state.i as usize;
             let slice_end = slice_start + (*n as usize);
             let sprite = &state.memory[slice_start..slice_end];
-            state
-                .buffer
-                .draw_sprite_at(*x as usize, *y as usize, sprite);
+            state.buffer.draw_sprite_at(x as usize, y as usize, sprite);
             if verbosely || log_enabled!(Debug) {
                 let pretty_sprite = sprite
                     .iter()
@@ -256,9 +256,15 @@ fn execute<'a>(
                     .collect::<Vec<_>>()
                     .join("\n");
                 if verbosely {
-                    println!("\tSprite data:\n{}", pretty_sprite);
+                    println!(
+                        "\tDrawing at ({}, {}) with sprite data:\n{}",
+                        x, y, pretty_sprite
+                    );
                 } else if log_enabled!(Debug) {
-                    debug!("\tSprite data:\n{}", pretty_sprite);
+                    debug!(
+                        "\tDrawing at ({}, {}) with sprite data:\n{}",
+                        x, y, pretty_sprite
+                    );
                 }
             }
         }

@@ -82,7 +82,7 @@ pub enum Instruction {
     /// Set Vx = random byte & kk.
     RND(u8, u8),
 
-    /// DRW x, y, n
+    /// DRW Vx, Vy, n
     /// Display n-byte sprite starting at memory location I at (Vx, Vy).
     DRW(u8, u8, u8),
 
