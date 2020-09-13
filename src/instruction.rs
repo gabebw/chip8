@@ -181,8 +181,8 @@ impl Into<u16> for Instruction {
     }
 }
 
+#[cfg(test)]
 mod test {
-    #[allow(unused_imports)]
     use super::{Instruction::*, *};
 
     // This helper function exists so that we don't have to inline an ugly

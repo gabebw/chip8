@@ -143,8 +143,8 @@ impl Display {
     }
 }
 
+#[cfg(test)]
 mod test {
-    #[allow(unused_imports)]
     use super::*;
 
     // Assert on all 100 pixels (10 in x direction, 10 in y direction) that a single logical pixel corresponds to.

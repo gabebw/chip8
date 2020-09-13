@@ -274,13 +274,11 @@ fn execute<'a>(
     Ok(state)
 }
 
+#[cfg(test)]
 mod test {
-    use std::convert::TryInto;
-
-    #[allow(unused_imports)]
     use super::*;
-    #[allow(unused_imports)]
     use crate::instruction::Address;
+    use std::convert::TryInto;
 
     fn addr(n: u16) -> Address {
         n.try_into().unwrap()
