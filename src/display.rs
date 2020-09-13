@@ -44,6 +44,24 @@ impl ScaledFramebuffer {
         &self.buffer
     }
 
+    /// Get the value of a pixel at logical location (x, y).
+    pub fn get_pixel(&self, x: usize, y: usize) -> u32 {
+        self.buffer[(SCALE * x) + (SCALE * y * self.true_width)]
+    }
+
+    /// Set the value of a pixel at logical location (x, y).
+    /// Behind the scenes, this actually sets `SCALE * SCALE` physical pixels because
+    /// it sets `SCALE` pixels across times `SCALE` pixels down.
+    pub fn set_pixel(&mut self, x: usize, y: usize, new_value: u32) {
+        for x_offset in 0..SCALE {
+            let scaled_x = SCALE * x + x_offset;
+            for y_offset in 0..SCALE {
+                let scaled_y = (SCALE * y + y_offset) * self.true_width;
+                self.buffer[scaled_x + scaled_y] = new_value;
+            }
+        }
+    }
+
     /// XOR a given pixel at logical location (x, y) with the incoming input bit
     /// (true = 1, false = 0).
     /// If the input bit is 0, does nothing.
@@ -55,24 +73,12 @@ impl ScaledFramebuffer {
         }
 
         // Only check one pixel and assume that all 100 pixels are the same (either all ON or all OFF)
-        if self.buffer[(SCALE * x) + (SCALE * y * self.true_width)] == ON {
+        if self.get_pixel(x, y) == ON {
             debug!("xor ({}, {}): Flipping from ON to OFF", x, y);
+            self.set_pixel(x, y, OFF);
         } else {
             debug!("xor ({}, {}): Flipping from OFF to ON", x, y);
-        }
-        // Pixels are scaled by SCALE amount (e.g. 64x32 -> 640x320).
-        // So we set SCALE pixels across and SCALE pixels down for each "pixel".
-        for x_offset in 0..SCALE {
-            let scaled_x = SCALE * x + x_offset;
-            for y_offset in 0..SCALE {
-                let scaled_y = (SCALE * y + y_offset) * self.true_width;
-                let old_value = self.buffer[scaled_x + scaled_y];
-                if old_value == ON {
-                    self.buffer[scaled_x + scaled_y] = OFF;
-                } else {
-                    self.buffer[scaled_x + scaled_y] = ON;
-                }
-            }
+            self.set_pixel(x, y, ON);
         }
     }
 
