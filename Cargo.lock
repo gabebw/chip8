@@ -106,6 +106,7 @@ dependencies = [
  "env_logger 0.7.1",
  "log",
  "minifb",
+ "rand 0.7.3",
  "structopt",
  "thiserror",
 ]

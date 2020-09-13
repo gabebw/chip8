@@ -4,6 +4,7 @@ use crate::{
     instruction::{Instruction, Instruction::*},
 };
 use log::Level::Debug;
+use rand::{Rng, RngCore};
 use std::convert::TryFrom;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -99,13 +100,15 @@ impl State {
 /// Run the entire program, forever.
 pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error> {
     let mut display = Display::new(state.buffer.true_width, state.buffer.true_height);
+    let rng = rand::thread_rng();
+
     while display.is_running() {
         match state.next_chunk() {
             Some(chunk) => {
                 // Advance by 2 bytes since 1 chunk is 2 bytes
                 state.pc += 2;
                 let instruction = Instruction::try_from(&chunk)?;
-                execute(state, &instruction, verbosely)?;
+                execute(state, &instruction, Box::new(rng), verbosely)?;
                 display.draw(&state.buffer);
                 trace!("{}", state.buffer.pretty_print());
 
@@ -125,12 +128,12 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
 // Do one thing in the interpreter (run one instruction) and return the changed state.
 // Useful for testing.
 #[cfg(test)]
-fn tick(state: &mut State) -> Result<&mut State, Chip8Error> {
+fn tick(state: &mut State, rng: Box<dyn RngCore>) -> Result<&mut State, Chip8Error> {
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
     state.pc += 2;
     let instruction = Instruction::try_from(&chunk)?;
-    execute(state, &instruction, false)?;
+    execute(state, &instruction, rng, false)?;
     Ok(state)
 }
 
@@ -138,6 +141,7 @@ fn tick(state: &mut State) -> Result<&mut State, Chip8Error> {
 fn execute<'a>(
     state: &'a mut State,
     instruction: &Instruction,
+    mut rng: Box<dyn RngCore>,
     verbosely: bool,
 ) -> Result<&'a mut State, Chip8Error> {
     if verbosely {
@@ -227,6 +231,17 @@ fn execute<'a>(
                 println!("\tSet register I to {:04X}", value);
             }
         }
+        RND(register, byte) => {
+            let random_value: u8 = rng.gen();
+            let new_value = random_value & byte;
+            state.set_register(*register, new_value);
+            if verbosely {
+                println!(
+                    "\tSet register V{:X} to {:X} (= {:X} & {:X})",
+                    register, new_value, random_value, byte
+                );
+            }
+        }
         DRW(x, y, n) => {
             let slice_start = state.i as usize;
             let slice_end = slice_start + (*n as usize);
@@ -291,10 +306,17 @@ mod test {
         State::with_program(&build_program(addresses_and_chunks))
     }
 
+    // A random-number generator with a pre-determined seed.
+    fn testing_rng() -> Box<dyn RngCore> {
+        use rand::SeedableRng;
+        let rng = rand::rngs::StdRng::seed_from_u64(0);
+        Box::new(rng)
+    }
+
     #[test]
     fn sys_ignored_advances_pc() {
         let mut state = build_state_with_program(&[(0, SYS().into())]);
-        tick(&mut state).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.pc, 0x202);
     }
 
@@ -310,7 +332,7 @@ mod test {
         ]);
 
         for _ in 1..=3 {
-            tick(&mut state).unwrap();
+            tick(&mut state, testing_rng()).unwrap();
         }
 
         assert_eq!(state.pc, 0x202);
@@ -321,21 +343,21 @@ mod test {
     #[test]
     fn jp_addr() {
         let mut state = build_state_with_program(&[(0, JP(Address::unwrapped(0xBCD)).into())]);
-        tick(&mut state).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.pc, 0xBCD);
     }
 
     #[test]
     fn ld_vx() {
         let mut state = build_state_with_program(&[(0, LD(0xD, 0x12).into())]);
-        tick(&mut state).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x12);
     }
 
     #[test]
     fn ld_i() {
         let mut state = build_state_with_program(&[(0, LDI(Address::unwrapped(0x400)).into())]);
-        tick(&mut state).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.i, 0x400);
     }
 
@@ -347,8 +369,8 @@ mod test {
                 (0, LD(0xD, 0x12).into()),
                 (2, ADD(0xD, 0x12).into())
             ]);
-        tick(&mut state).unwrap();
-        tick(&mut state).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x24);
     }
 
@@ -363,7 +385,7 @@ mod test {
             (6, LD(0x1, 0xFF).into()),
         ]);
         for _ in 0..3 {
-            tick(&mut state).unwrap();
+            tick(&mut state, testing_rng()).unwrap();
         }
         assert_eq!(state.get_register(0x1), 0xFF);
     }
@@ -379,8 +401,22 @@ mod test {
             (6, LD(0x1, 0xFF).into()),
         ]);
         for _ in 0..3 {
-            tick(&mut state).unwrap();
+            tick(&mut state, testing_rng()).unwrap();
         }
         assert_eq!(state.get_register(0x1), 0xFF);
+    }
+
+    #[test]
+    fn rnd() {
+        #[rustfmt::skip]
+        let mut state = build_state_with_program(&[
+            (0, LD(0x1, 0x00).into()),
+            (2, RND(0x1, 0xFF).into()),
+        ]);
+        tick(&mut state, testing_rng()).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
+        // The testing RNG will always generate 0xB2 as its first u8. 0xB2 &
+        // 0xFF == 0xB2
+        assert_eq!(state.get_register(0x1), 0xB2);
     }
 }

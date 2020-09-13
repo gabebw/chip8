@@ -79,6 +79,9 @@ pub enum Instruction {
     /// Set register I to nnn.
     LDI(Address),
 
+    /// Set Vx = random byte & kk.
+    RND(u8, u8),
+
     /// DRW x, y, n
     /// Display n-byte sprite starting at memory location I at (Vx, Vy).
     DRW(u8, u8, u8),
@@ -106,6 +109,7 @@ impl Display for Instruction {
             LD(register, value) => write!(f, "LD V{:X}, {:02X}", register, value),
             ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register, addend),
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
+            RND(register, byte) => write!(f, "RND V{:X}, {:02X}", register, byte),
             DRW(x, y, n) => write!(f, "DRW V{:X}, V{:X}, {:02X}", x, y, n),
             ADDI(register) => write!(f, "ADD I, V{:X}", register),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
@@ -146,6 +150,7 @@ impl TryFrom<&u16> for Instruction {
             0x6 => LD(b, byte2),
             0x7 => ADD(b, byte2),
             0xA => LDI(address(&chunk)?),
+            0xC => RND(b, byte2),
             0xD => DRW(b, c, d),
             0xF => ADDI(b),
             _ => UNKNOWN(*chunk),
@@ -175,6 +180,7 @@ impl Into<u16> for Instruction {
             LD(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
             ADD(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
             LDI(address) => 0xA000 + address.0,
+            RND(register, byte) => 0xC000 + hundreds(register) + u16::from(byte),
             DRW(x, y, n) => 0xD000 + hundreds(x) + tens(y) + u16::from(n),
             ADDI(register) => 0xF000 + hundreds(register) + 0x1E,
             UNKNOWN(bytes) => bytes,
@@ -249,6 +255,11 @@ mod test {
     }
 
     #[test]
+    fn as_u16_rnd() {
+        assert_eq!(into_u16(RND(0xA, 0xBC)), 0xCABC)
+    }
+
+    #[test]
     fn from_u16() {
         use std::collections::HashMap;
 
@@ -263,6 +274,7 @@ mod test {
             (0x6003, LD(0x0, 0x03.try_into().unwrap())),
             (0x7123, ADD(0x1, 0x23)),
             (0xA278, LDI(0x278.try_into().unwrap())),
+            (0xC123, RND(0x1, 0x23)),
             (0xD123, DRW(0x1, 0x2, 0x3)),
             (0xF51E, ADDI(0x5))
         ].iter().cloned().collect();

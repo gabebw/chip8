@@ -13,3 +13,4 @@ clap-log-flag = { git = "https://github.com/gabebw/clap-log-flag", branch = "upd
 log = "0.4.11"
 env_logger = "0.7.1"
 minifb = "0.18.0"
+rand = "0.7.3"
