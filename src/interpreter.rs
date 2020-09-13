@@ -139,7 +139,8 @@ fn execute<'a>(
     verbosely: bool,
 ) -> Result<&'a mut State, Chip8Error> {
     if verbosely {
-        println!("{}", instruction);
+        // Subtract 2 to get the value for this instruction, because we add 2 before running `execute`
+        println!("[{:03X}], {}", state.pc - 2, instruction);
     }
     match instruction {
         SYS() => {
