@@ -12,6 +12,7 @@ fn last_3_bits(bytes: &u16) -> u16 {
 pub struct Address(u16);
 
 impl Address {
+    #[cfg(test)]
     pub fn unwrapped(chunk: u16) -> Self {
         Self::try_from(chunk).unwrap()
     }
@@ -192,10 +193,6 @@ mod test {
         i.into()
     }
 
-    fn addr(n: u16) -> Address {
-        n.try_into().unwrap()
-    }
-
     #[test]
     fn as_u16_ret() {
         assert_eq!(into_u16(RET()), 0x00EE)
@@ -208,12 +205,12 @@ mod test {
 
     #[test]
     fn as_u16_jp() {
-        assert_eq!(into_u16(JP(addr(0x234))), 0x1234)
+        assert_eq!(into_u16(JP(Address::unwrapped(0x234))), 0x1234)
     }
 
     #[test]
     fn as_u16_call() {
-        assert_eq!(into_u16(CALL(addr(0x345))), 0x2345)
+        assert_eq!(into_u16(CALL(Address::unwrapped(0x345))), 0x2345)
     }
 
     #[test]
@@ -238,7 +235,7 @@ mod test {
 
     #[test]
     fn as_u16_ldi() {
-        assert_eq!(into_u16(LDI(addr(0xBCD))), 0xABCD)
+        assert_eq!(into_u16(LDI(Address::unwrapped(0xBCD))), 0xABCD)
     }
 
     #[test]

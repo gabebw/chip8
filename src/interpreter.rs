@@ -33,19 +33,6 @@ pub struct State {
 }
 
 impl State {
-    /// Create a new State with default values.
-    pub fn new() -> Self {
-        Self {
-            memory: vec![0; 4096],
-            registers: vec![0; 16],
-            i: 0,
-            pc: 0x200,
-            sp: 0,
-            stack: vec![0; 16],
-            buffer: ScaledFramebuffer::new(),
-        }
-    }
-
     /// Create a new State with the given program.
     pub fn with_program(program: &[u8]) -> Self {
         // Program space is from 0x200 to 0xFFF.
@@ -137,6 +124,7 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
 
 // Do one thing in the interpreter (run one instruction) and return the changed state.
 // Useful for testing.
+#[cfg(test)]
 fn tick(state: &mut State) -> Result<&mut State, Chip8Error> {
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
@@ -278,11 +266,6 @@ fn execute<'a>(
 mod test {
     use super::*;
     use crate::instruction::Address;
-    use std::convert::TryInto;
-
-    fn addr(n: u16) -> Address {
-        n.try_into().unwrap()
-    }
 
     // Build a program by inserting u16s (as u8s) at the given address and
     // address+1, with everything else filled with zeroes.
@@ -319,7 +302,7 @@ mod test {
     fn call_subroutine_and_return() {
         let mut state = build_state_with_program(&[
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
-            (0, CALL(addr(0x300)).into()),
+            (0, CALL(Address::unwrapped(0x300)).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
             (0x100, LD(0x1, 0x20).into()),
             // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
@@ -337,7 +320,7 @@ mod test {
 
     #[test]
     fn jp_addr() {
-        let mut state = build_state_with_program(&[(0, JP(addr(0xBCD)).into())]);
+        let mut state = build_state_with_program(&[(0, JP(Address::unwrapped(0xBCD)).into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.pc, 0xBCD);
     }
@@ -351,7 +334,7 @@ mod test {
 
     #[test]
     fn ld_i() {
-        let mut state = build_state_with_program(&[(0, LDI(addr(0x400)).into())]);
+        let mut state = build_state_with_program(&[(0, LDI(Address::unwrapped(0x400)).into())]);
         tick(&mut state).unwrap();
         assert_eq!(state.i, 0x400);
     }
