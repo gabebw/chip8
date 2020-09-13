@@ -110,7 +110,7 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
                 let instruction = Instruction::try_from(&chunk)?;
                 execute(state, &instruction, Box::new(rng), verbosely)?;
                 display.draw(&state.buffer);
-                trace!("{}", state.buffer.pretty_print());
+                trace!("{}", state.buffer.pretty_print_physical());
 
                 if let DRW(_, _, _) = instruction {
                     // Show the thing we just drew because otherwise it

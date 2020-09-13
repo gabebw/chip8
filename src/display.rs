@@ -88,7 +88,7 @@ impl ScaledFramebuffer {
 
     /// Pretty-print a grid of 1 (on) and 0 (off) that represents the screen.
     /// Prints physical pixels, for debugging.
-    pub fn pretty_print(&self) -> String {
+    pub fn pretty_print_physical(&self) -> String {
         let mut result = vec![];
         for (index, row) in self.buffer.chunks_exact(self.true_width).enumerate() {
             let column = row
