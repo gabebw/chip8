@@ -248,7 +248,8 @@ fn execute<'a>(
             let slice_start = state.i as usize;
             let slice_end = slice_start + (*n as usize);
             let sprite = &state.memory[slice_start..slice_end];
-            state.buffer.draw_sprite_at(x as usize, y as usize, sprite);
+            let flipped_from_off_to_on =
+                state.buffer.draw_sprite_at(x as usize, y as usize, sprite);
             if verbosely || log_enabled!(Debug) {
                 let pretty_sprite = sprite
                     .iter()
@@ -257,15 +258,26 @@ fn execute<'a>(
                     .join("\n");
                 if verbosely {
                     println!(
-                        "\tDrawing at ({}, {}) with sprite data:\n{}",
-                        x, y, pretty_sprite
+                        "\tDrawing at ({}, {}) with sprite data (VF set to {}):\n{}",
+                        x,
+                        y,
+                        if flipped_from_off_to_on { 1 } else { 0 },
+                        pretty_sprite,
                     );
                 } else if log_enabled!(Debug) {
                     debug!(
-                        "\tDrawing at ({}, {}) with sprite data:\n{}",
-                        x, y, pretty_sprite
+                        "\tDrawing at ({}, {}) with sprite data (VF set to {}):\n{}",
+                        x,
+                        y,
+                        if flipped_from_off_to_on { 1 } else { 0 },
+                        pretty_sprite,
                     );
                 }
+            }
+            if flipped_from_off_to_on {
+                state.set_register(0xF, 1);
+            } else {
+                state.set_register(0xF, 0);
             }
         }
         ADDI(register) => {
@@ -286,7 +298,7 @@ fn execute<'a>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::instruction::Address;
+    use crate::{display, instruction::Address};
 
     // Build a program by inserting u16s (as u8s) at the given address and
     // address+1, with everything else filled with zeroes.
@@ -424,5 +436,79 @@ mod test {
         // The testing RNG will always generate 0xB2 as its first u8. 0xB2 &
         // 0xFF == 0xB2
         assert_eq!(state.get_register(0x1), 0xB2);
+    }
+
+    #[test]
+    fn drw_with_vf_flip_to_1() {
+        let sprite1: u8 = 0b11110000;
+        // Sprite 2 intentionally has exactly 1 bit that's the same as sprite 1,
+        // so that when we draw sprite1 then sprite2, it draws a pixel as set,
+        // then unset, causing VF to be set to 1.
+        let sprite2: u8 = 0b00010000;
+        let sprites_combined = u16::from_be_bytes([sprite1, sprite2]);
+
+        #[rustfmt::skip]
+        let mut state = build_state_with_program(&[
+            (0, LD(0x1, 0x00).into()),
+            (2, LD(0x2, 0x00).into()),
+            // Offset by 0x200 so we're indexing into program memory
+            (4, LDI(Address::unwrapped(0x200 + 12)).into()),
+            // Draw sprite1
+            (6, DRW(0x1, 0x2, 0x01).into()),
+            // Offset by 0x200 so we're indexing into program memory
+            (8, LDI(Address::unwrapped(0x200 + 13)).into()),
+            // Draw sprite2
+            (10, DRW(0x1, 0x2, 0x01).into()),
+            // Sprite1 is at 12 and sprite2 is at 13
+            (12, sprites_combined)
+        ]);
+        for _ in 0..6 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+
+        // VF flips to 1 because a set pixel was changed to unset
+        assert_eq!(state.get_register(0xF), 0x1);
+        // These pixels stay ON
+        assert_eq!(state.buffer.get_pixel(0, 0), display::ON);
+        assert_eq!(state.buffer.get_pixel(1, 0), display::ON);
+        assert_eq!(state.buffer.get_pixel(2, 0), display::ON);
+        // This is the pixel that flipped from ON to OFF
+        assert_eq!(state.buffer.get_pixel(3, 0), display::OFF);
+        // These pixels stay OFF
+        assert_eq!(state.buffer.get_pixel(4, 0), display::OFF);
+        assert_eq!(state.buffer.get_pixel(5, 0), display::OFF);
+        assert_eq!(state.buffer.get_pixel(6, 0), display::OFF);
+        assert_eq!(state.buffer.get_pixel(7, 0), display::OFF);
+    }
+
+    #[test]
+    fn drw_with_vf_flip_back_to_0() {
+        // Draw this sprite 3 times so that VF goes from 0 -> 1 -> 0 again
+        let sprite: u8 = 0b10000000;
+        let sprites_combined = u16::from_be_bytes([sprite, sprite]);
+
+        #[rustfmt::skip]
+        let mut state = build_state_with_program(&[
+            (0, LD(0x1, 0x00).into()),
+            (2, LD(0x2, 0x00).into()),
+            // Offset by 0x200 so we're indexing into program memory
+            (4, LDI(Address::unwrapped(0x200 + 12)).into()),
+            // Draw sprite (VF stays at 0, pixel changed from unset to set)
+            (6, DRW(0x1, 0x2, 0x01).into()),
+            // Draw sprite (VF flips to 1, pixel changed from set to unset)
+            (8, DRW(0x1, 0x2, 0x01).into()),
+            // Draw sprite (VF flips to 0, no pixel changed from set to unset)
+            (10, DRW(0x1, 0x2, 0x01).into()),
+            (12, sprites_combined)
+        ]);
+        for _ in 0..6 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+
+        assert_eq!(state.get_register(0xF), 0x0);
+        assert_eq!(state.buffer.get_pixel(0, 0), display::ON);
+        for x in 1..8 {
+            assert_eq!(state.buffer.get_pixel(x, 0), display::OFF);
+        }
     }
 }

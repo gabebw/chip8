@@ -5,8 +5,8 @@ const CHIP8_WIDTH: usize = 64;
 const CHIP8_HEIGHT: usize = 32;
 // Our display is 10x bigger than CHIP-8 in every direction
 const SCALE: usize = 10;
-const ON: u32 = 0xFF_FF_FF; // white
-const OFF: u32 = 0; // black
+pub const ON: u32 = 0xFF_FF_FF; // white
+pub const OFF: u32 = 0; // black
 const SIXTY_FPS: Duration = Duration::from_micros(16600);
 
 /// A framebuffer that pretends to be 10x smaller than it is. This lets it
@@ -45,6 +45,8 @@ impl ScaledFramebuffer {
     }
 
     /// Get the value of a pixel at logical location (x, y).
+    /// It only checks one physical pixel, and assumes all of the other pixels
+    /// that make up this one logical pixel have the same value.
     pub fn get_pixel(&self, x: usize, y: usize) -> u32 {
         self.buffer[(SCALE * x) + (SCALE * y * self.true_width)]
     }
@@ -66,23 +68,26 @@ impl ScaledFramebuffer {
     /// (true = 1, false = 0).
     /// If the input bit is 0, does nothing.
     /// If the input bit is 1, flips the value at (x, y).
-    pub fn xor(&mut self, input_bit: bool, x: usize, y: usize) {
+    /// Returns true if a set pixel was changed to unset, and false otherwise.
+    pub fn xor(&mut self, input_bit: bool, x: usize, y: usize) -> bool {
         if !input_bit {
             debug!("xor ({}, {}): input is 0, not doing anything", x, y);
-            return;
+            return false;
         }
 
-        // Only check one pixel and assume that all 100 pixels are the same (either all ON or all OFF)
         if self.get_pixel(x, y) == ON {
             debug!("xor ({}, {}): Flipping from ON to OFF", x, y);
             self.set_pixel(x, y, OFF);
+            true
         } else {
             debug!("xor ({}, {}): Flipping from OFF to ON", x, y);
             self.set_pixel(x, y, ON);
+            false
         }
     }
 
     /// Pretty-print a grid of 1 (on) and 0 (off) that represents the screen.
+    /// Prints physical pixels, for debugging.
     pub fn pretty_print(&self) -> String {
         let mut result = vec![];
         for (index, row) in self.buffer.chunks_exact(self.true_width).enumerate() {
@@ -101,7 +106,9 @@ impl ScaledFramebuffer {
     /// 00111100
     /// 00100100
     /// 00111100
-    pub fn draw_sprite_at(&mut self, x: usize, y: usize, sprite: &[u8]) {
+    /// Returns true if a set pixel was changed to unset, and false otherwise.
+    pub fn draw_sprite_at(&mut self, x: usize, y: usize, sprite: &[u8]) -> bool {
+        let mut changed_from_on_to_off = false;
         let bit_is_set = |byte: &u8, position: u8| ((byte & (1 << position)) >> position) == 1;
         for (y_offset, row) in sprite.iter().enumerate() {
             // Move left across the bits of the byte:
@@ -111,9 +118,11 @@ impl ScaledFramebuffer {
             //  ^------
             for x_offset in 0..=7 {
                 let input_bit = bit_is_set(row, (7 - x_offset) as u8);
-                self.xor(input_bit, x + x_offset, y + y_offset);
+                let result = self.xor(input_bit, x + x_offset, y + y_offset);
+                changed_from_on_to_off = result || changed_from_on_to_off;
             }
         }
+        changed_from_on_to_off
     }
 }
 
@@ -169,8 +178,9 @@ mod test {
         let mut fb = ScaledFramebuffer::with_size(5, 5);
         let x = 2;
         let y = 2;
-        fb.xor(true, x, y);
+        let flipped_to_off = fb.xor(true, x, y);
 
+        assert_eq!(flipped_to_off, false);
         assert_pixel(&fb, x, y, ON);
     }
 
@@ -183,6 +193,16 @@ mod test {
         fb.xor(true, x, y);
 
         assert_pixel(&fb, x, y, OFF);
+    }
+
+    #[test]
+    fn xor_detect_when_pixel_flips_from_on_to_off() {
+        let mut fb = ScaledFramebuffer::with_size(5, 5);
+        let x = 2;
+        let y = 2;
+
+        assert_eq!(fb.xor(true, x, y), false);
+        assert_eq!(fb.xor(true, x, y), true);
     }
 
     #[test]
@@ -252,5 +272,15 @@ mod test {
                 assert_pixel(&fb, x, y, *value);
             }
         }
+    }
+
+    #[test]
+    fn draw_sprite_detect_when_pixel_flips_from_on_to_off() {
+        let sprite1 = &[0b11110000];
+        let sprite2 = &[0b00010000];
+        let mut fb = ScaledFramebuffer::with_size(8, 1);
+
+        assert_eq!(fb.draw_sprite_at(0, 0, sprite1), false);
+        assert_eq!(fb.draw_sprite_at(0, 0, sprite2), true);
     }
 }
