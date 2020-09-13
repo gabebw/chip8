@@ -13,3 +13,13 @@ To run the program, with helpful statements indicating what instructions it's
 executing:
 
     chip8 trace FILE.ch8
+
+## Testing
+
+Run tests:
+
+    cargo test
+
+Test that the opcodes work correctly by running the included test ROM:
+
+    cargo run -- trace test_opcode.ch8
