@@ -116,7 +116,7 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
                     // Show the thing we just drew because otherwise it
                     // disappears immediately when the program panics on an
                     // instruction it doesn't understand
-                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                 }
             }
             None => break,
