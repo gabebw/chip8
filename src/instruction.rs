@@ -39,6 +39,19 @@ impl Into<u16> for Address {
     }
 }
 
+#[derive(Debug, PartialEq, Copy, Clone)]
+/// A Register is a 4-bit value that addresses a register numbered from 0x0 to 0xF.
+pub struct Register(pub u8);
+
+impl From<u8> for Register {
+    fn from(n: u8) -> Self {
+        if n > 0xF {
+            panic!("Register value must be from 0x0 - 0xF (got {:X})", n)
+        }
+        Register(n)
+    }
+}
+
 impl PartialEq<u16> for Address {
     fn eq(&self, number: &u16) -> bool {
         self.0 == *number
@@ -46,6 +59,7 @@ impl PartialEq<u16> for Address {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+#[allow(non_camel_case_types)]
 pub enum Instruction {
     /// Ignored
     SYS(),
@@ -64,39 +78,38 @@ pub enum Instruction {
     CALL(Address),
 
     /// Skip next instruction if Vx == kk.
-    SE(u8, u8),
+    SE(Register, u8),
 
     /// Skip next instruction if Vx != kk.
-    SNE(u8, u8),
+    SNE(Register, u8),
 
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
-    LD(u8, u8),
+    LD(Register, u8),
 
     /// Vx += kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx.
-    ADD(u8, u8),
+    ADD(Register, u8),
 
     /// Vx += Vy
     /// Set Vx = Vx + Vy, set VF = carry.
     /// The values of Vx and Vy are added together. If the result is greater than
     /// 8 bits (i.e., > 255,) VF is set to 1, otherwise 0.
     /// Only the lowest 8 bits of the result are kept, and stored in Vx.
-    #[allow(non_camel_case_types)]
-    ADD_REGISTERS(u8, u8),
+    ADD_REGISTERS(Register, Register),
 
     /// Set register I to nnn.
     LDI(Address),
 
     /// Set Vx = random byte & kk.
-    RND(u8, u8),
+    RND(Register, u8),
 
     /// DRW Vx, Vy, n
     /// Display n-byte sprite starting at memory location I at (Vx, Vy).
-    DRW(u8, u8, u8),
+    DRW(Register, Register, u8),
 
     // ADD I, Vx
     // Set I = I + Vx.
-    ADDI(u8),
+    ADDI(Register),
 
     /// Until this program knows how to parse every CHIP-8 instruction, this
     /// makes it possible to print out "unknown" (so far) instructions.
@@ -112,17 +125,17 @@ impl Display for Instruction {
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
-            SE(register, byte) => write!(f, "SE V{:X}, {:02X}", register, byte),
-            SNE(register, byte) => write!(f, "SNE V{:X}, {:02X}", register, byte),
-            LD(register, value) => write!(f, "LD V{:X}, {:02X}", register, value),
-            ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register, addend),
+            SE(register, byte) => write!(f, "SE V{:X}, {:02X}", register.0, byte),
+            SNE(register, byte) => write!(f, "SNE V{:X}, {:02X}", register.0, byte),
+            LD(register, value) => write!(f, "LD V{:X}, {:02X}", register.0, value),
+            ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register.0, addend),
             ADD_REGISTERS(register_x, register_y) => {
-                write!(f, "ADD V{:X} += V{:X}", register_x, register_y)
+                write!(f, "ADD V{:X} += V{:X}", register_x.0, register_y.0)
             }
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
-            RND(register, byte) => write!(f, "RND V{:X}, {:02X}", register, byte),
-            DRW(x, y, n) => write!(f, "DRW V{:X}, V{:X}, {:02X}", x, y, n),
-            ADDI(register) => write!(f, "ADD I, V{:X}", register),
+            RND(register, byte) => write!(f, "RND V{:X}, {:02X}", register.0, byte),
+            DRW(x, y, n) => write!(f, "DRW V{:X}, V{:X}, {:02X}", x.0, y.0, n),
+            ADDI(register) => write!(f, "ADD I, V{:X}", register.0),
             UNKNOWN(bytes) => write!(f, "Unknown: {:02X}", bytes),
         }
     }
@@ -156,15 +169,15 @@ impl TryFrom<&u16> for Instruction {
             },
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
-            0x3 => SE(b, byte2),
-            0x4 => SNE(b, byte2),
-            0x6 => LD(b, byte2),
-            0x7 => ADD(b, byte2),
-            0x8 => ADD_REGISTERS(b, c),
+            0x3 => SE(Register(b), byte2),
+            0x4 => SNE(Register(b), byte2),
+            0x6 => LD(Register(b), byte2),
+            0x7 => ADD(Register(b), byte2),
+            0x8 => ADD_REGISTERS(Register(b), Register(c)),
             0xA => LDI(address(&chunk)?),
-            0xC => RND(b, byte2),
-            0xD => DRW(b, c, d),
-            0xF => ADDI(b),
+            0xC => RND(Register(b), byte2),
+            0xD => DRW(Register(b), Register(c), d),
+            0xF => ADDI(Register(b)),
             _ => UNKNOWN(*chunk),
         };
         Ok(instruction)
@@ -177,8 +190,8 @@ impl Into<u16> for Instruction {
 
         // Yes, it's not actually tens/hundreds/thousands places since we're in
         // hexadecimal, but it's a helpful idea.
-        let tens = |n: u8| u16::from(n) * 0x10;
-        let hundreds = |n: u8| u16::from(n) * 0x100;
+        let tens = |n: Register| u16::from(n.0) * 0x10;
+        let hundreds = |n: Register| u16::from(n.0) * 0x100;
 
         match self {
             // Since SYS is technically any 0nnn opcode that's not 00E0 or 00EE,
@@ -234,24 +247,28 @@ mod test {
         assert_eq!(into_u16(CALL(Address::unwrapped(0x345))), 0x2345)
     }
 
+    fn r(n: u8) -> Register {
+        Register(n)
+    }
+
     #[test]
     fn as_u16_se() {
-        assert_eq!(into_u16(SE(0x4, 0x56)), 0x3456)
+        assert_eq!(into_u16(SE(r(0x4), 0x56)), 0x3456)
     }
 
     #[test]
     fn as_u16_sne() {
-        assert_eq!(into_u16(SNE(0x5, 0x67)), 0x4567)
+        assert_eq!(into_u16(SNE(r(0x5), 0x67)), 0x4567)
     }
 
     #[test]
     fn as_u16_ld() {
-        assert_eq!(into_u16(LD(0x7, 0x89)), 0x6789);
+        assert_eq!(into_u16(LD(r(0x7), 0x89)), 0x6789);
     }
 
     #[test]
     fn as_u16_add() {
-        assert_eq!(into_u16(ADD(0x8, 0x9A)), 0x789A)
+        assert_eq!(into_u16(ADD(r(0x8), 0x9A)), 0x789A)
     }
 
     #[test]
@@ -261,22 +278,22 @@ mod test {
 
     #[test]
     fn as_u16_drw() {
-        assert_eq!(into_u16(DRW(0xA, 0xB, 0xC)), 0xDABC)
+        assert_eq!(into_u16(DRW(r(0xA), r(0xB), 0xC)), 0xDABC)
     }
 
     #[test]
     fn as_u16_addi() {
-        assert_eq!(into_u16(ADDI(0xB)), 0xFB1E)
+        assert_eq!(into_u16(ADDI(r(0xB))), 0xFB1E)
     }
 
     #[test]
     fn as_u16_rnd() {
-        assert_eq!(into_u16(RND(0xA, 0xBC)), 0xCABC)
+        assert_eq!(into_u16(RND(r(0xA), 0xBC)), 0xCABC)
     }
 
     #[test]
     fn as_u16_add_registers() {
-        assert_eq!(into_u16(ADD_REGISTERS(0xA, 0xB)), 0x8AB4)
+        assert_eq!(into_u16(ADD_REGISTERS(r(0xA), r(0xB))), 0x8AB4)
     }
 
     #[test]
@@ -289,15 +306,15 @@ mod test {
             (0x0ABC, SYS()),
             (0x1A12, JP(0xA12.try_into().unwrap())),
             (0x221A, CALL(0x21A.try_into().unwrap())),
-            (0x3934, SE(0x9, 0x34)),
-            (0x4A56, SNE(0xA, 0x56)),
-            (0x6003, LD(0x0, 0x03.try_into().unwrap())),
-            (0x7123, ADD(0x1, 0x23)),
-            (0x8124, ADD_REGISTERS(0x1, 0x2)),
+            (0x3934, SE(r(0x9), 0x34)),
+            (0x4A56, SNE(r(0xA), 0x56)),
+            (0x6003, LD(r(0x0), 0x03.try_into().unwrap())),
+            (0x7123, ADD(r(0x1), 0x23)),
+            (0x8124, ADD_REGISTERS(r(0x1), r(0x2))),
             (0xA278, LDI(0x278.try_into().unwrap())),
-            (0xC123, RND(0x1, 0x23)),
-            (0xD123, DRW(0x1, 0x2, 0x3)),
-            (0xF51E, ADDI(0x5))
+            (0xC123, RND(r(0x1), 0x23)),
+            (0xD123, DRW(r(0x1), r(0x2), 0x3)),
+            (0xF51E, ADDI(r(0x5)))
         ].iter().cloned().collect();
 
         for (chunk, instruction) in instructions.into_iter() {

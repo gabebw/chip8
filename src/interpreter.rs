@@ -1,8 +1,8 @@
-use crate::error::Chip8Error;
 use crate::{
     display::{Display, ScaledFramebuffer},
     instruction::{Instruction, Instruction::*},
 };
+use crate::{error::Chip8Error, instruction::Register};
 use log::Level::Debug;
 use rand::{Rng, RngCore};
 use std::convert::TryFrom;
@@ -55,18 +55,19 @@ impl State {
     }
 
     /// Set the given register to the given value.
-    fn set_register(&mut self, register: u8, value: u8) {
-        self.registers[register as usize] = value;
+    fn set_register<U: Into<Register>>(&mut self, unconverted: U, value: u8) {
+        let register = unconverted.into();
+        self.registers[register.0 as usize] = value;
     }
 
     /// Get the value in the given register.
-    fn get_register(&mut self, register: u8) -> u8 {
-        assert!(register <= 0xF);
-        self.registers[register as usize]
+    fn get_register<U: Into<Register>>(&mut self, unconverted: U) -> u8 {
+        let register = unconverted.into();
+        self.registers[register.0 as usize]
     }
 
     /// Increase I by the value in the given register.
-    fn increase_i(&mut self, register: &u8) {
+    fn increase_i(&mut self, register: &Register) {
         self.i += self.get_register(*register) as u16;
     }
 
@@ -176,12 +177,12 @@ fn execute<'a>(
             if register_value == *byte {
                 state.pc += 2;
                 if verbosely {
-                    println!("\tSkipping ahead, V{:X} == {:02X}", register, byte);
+                    println!("\tSkipping ahead, V{:X} == {:02X}", register.0, byte);
                 }
             } else if verbosely {
                 println!(
                     "\tNot skipping, V{:X} is {:02X} (would skip if it were {:02X})",
-                    register, register_value, byte
+                    register.0, register_value, byte
                 );
             }
         }
@@ -190,19 +191,19 @@ fn execute<'a>(
             if register_value != *byte {
                 state.pc += 2;
                 if verbosely {
-                    println!("\tSkipping ahead, V{:X} != {:02X}", register, byte);
+                    println!("\tSkipping ahead, V{:X} != {:02X}", register.0, byte);
                 }
             } else if verbosely {
                 println!(
                     "\tNot skipping, V{:X} is {:02X} (would skip if it were not {:02X})",
-                    register, register_value, byte
+                    register.0, register_value, byte
                 );
             }
         }
         LD(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
-                println!("\tSet register V{:X} to {:02X}", register, value);
+                println!("\tSet register V{:X} to {:02X}", register.0, value);
             }
         }
         ADD(register, addend) => {
@@ -211,7 +212,7 @@ fn execute<'a>(
             if verbosely {
                 println!(
                     "\tChanged register V{:X} from {:02X} -> {:02X}",
-                    register,
+                    register.0,
                     old_value,
                     addend + old_value
                 );
@@ -228,7 +229,7 @@ fn execute<'a>(
             if verbosely {
                 println!(
                     "\tChanged register V{:X} from {:02X} -> {:02X} (VF = {})",
-                    register_x,
+                    register_x.0,
                     value_x,
                     result,
                     if did_overflow { 1 } else { 0 }
@@ -249,7 +250,7 @@ fn execute<'a>(
             if verbosely {
                 println!(
                     "\tSet register V{:X} to {:X} (= {:X} & {:X})",
-                    register, new_value, random_value, byte
+                    register.0, new_value, random_value, byte
                 );
             }
         }
@@ -349,13 +350,17 @@ mod test {
         assert_eq!(state.pc, 0x202);
     }
 
+    fn r(n: u8) -> Register {
+        Register(n)
+    }
+
     #[test]
     fn call_subroutine_and_return() {
         let mut state = build_state_with_program(&[
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
             (0, CALL(Address::unwrapped(0x300)).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
-            (0x100, LD(0x1, 0x20).into()),
+            (0x100, LD(r(0x1), 0x20).into()),
             // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
             (0x102, RET().into()),
         ]);
@@ -378,7 +383,7 @@ mod test {
 
     #[test]
     fn ld_vx() {
-        let mut state = build_state_with_program(&[(0, LD(0xD, 0x12).into())]);
+        let mut state = build_state_with_program(&[(0, LD(r(0xD), 0x12).into())]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x12);
     }
@@ -395,8 +400,8 @@ mod test {
         #[rustfmt::skip]
         let mut state =
             build_state_with_program(&[
-                (0, LD(0xD, 0x12).into()),
-                (2, ADD(0xD, 0x12).into())
+                (0, LD(r(0xD), 0x12).into()),
+                (2, ADD(r(0xD), 0x12).into())
             ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -406,12 +411,12 @@ mod test {
     #[test]
     fn sne() {
         let mut state = build_state_with_program(&[
-            (0, LD(0xD, 0x12).into()),
-            (2, SNE(0xD, 0x00).into()),
+            (0, LD(r(0xD), 0x12).into()),
+            (2, SNE(r(0xD), 0x00).into()),
             // This should be skipped
-            (4, LD(0x1, 0x00).into()),
+            (4, LD(r(0x1), 0x00).into()),
             // This one should run
-            (6, LD(0x1, 0xFF).into()),
+            (6, LD(r(0x1), 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -422,12 +427,12 @@ mod test {
     #[test]
     fn se() {
         let mut state = build_state_with_program(&[
-            (0, LD(0xD, 0x12).into()),
-            (2, SE(0xD, 0x12).into()),
+            (0, LD(r(0xD), 0x12).into()),
+            (2, SE(r(0xD), 0x12).into()),
             // This should be skipped
-            (4, LD(0x1, 0x00).into()),
+            (4, LD(r(0x1), 0x00).into()),
             // This one should run
-            (6, LD(0x1, 0xFF).into()),
+            (6, LD(r(0x1), 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -439,8 +444,8 @@ mod test {
     fn rnd() {
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(0x1, 0x00).into()),
-            (2, RND(0x1, 0xFF).into()),
+            (0, LD(r(0x1), 0x00).into()),
+            (2, RND(r(0x1), 0xFF).into()),
         ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -460,16 +465,16 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(0x1, 0x00).into()),
-            (2, LD(0x2, 0x00).into()),
+            (0, LD(r(0x1), 0x00).into()),
+            (2, LD(r(0x2), 0x00).into()),
             // Offset by 0x200 so we're indexing into program memory
             (4, LDI(Address::unwrapped(0x200 + 12)).into()),
             // Draw sprite1
-            (6, DRW(0x1, 0x2, 0x01).into()),
+            (6, DRW(r(0x1), r(0x2), 0x01).into()),
             // Offset by 0x200 so we're indexing into program memory
             (8, LDI(Address::unwrapped(0x200 + 13)).into()),
             // Draw sprite2
-            (10, DRW(0x1, 0x2, 0x01).into()),
+            (10, DRW(r(0x1), r(0x2), 0x01).into()),
             // Sprite1 is at 12 and sprite2 is at 13
             (12, sprites_combined)
         ]);
@@ -500,16 +505,16 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(0x1, 0x00).into()),
-            (2, LD(0x2, 0x00).into()),
+            (0, LD(r(0x1), 0x00).into()),
+            (2, LD(r(0x2), 0x00).into()),
             // Offset by 0x200 so we're indexing into program memory
             (4, LDI(Address::unwrapped(0x200 + 12)).into()),
             // Draw sprite (VF stays at 0, pixel changed from unset to set)
-            (6, DRW(0x1, 0x2, 0x01).into()),
+            (6, DRW(r(0x1), r(0x2), 0x01).into()),
             // Draw sprite (VF flips to 1, pixel changed from set to unset)
-            (8, DRW(0x1, 0x2, 0x01).into()),
+            (8, DRW(r(0x1), r(0x2), 0x01).into()),
             // Draw sprite (VF flips to 0, no pixel changed from set to unset)
-            (10, DRW(0x1, 0x2, 0x01).into()),
+            (10, DRW(r(0x1), r(0x2), 0x01).into()),
             (12, sprites_combined)
         ]);
         for _ in 0..6 {
@@ -526,9 +531,9 @@ mod test {
     #[test]
     fn add_registers_without_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LD(0xD, 0x12).into()),
-            (2, LD(0xE, 0x20).into()),
-            (4, ADD_REGISTERS(0xD, 0xE).into()),
+            (0, LD(r(0xD), 0x12).into()),
+            (2, LD(r(0xE), 0x20).into()),
+            (4, ADD_REGISTERS(r(0xD), r(0xE)).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -540,9 +545,9 @@ mod test {
     #[test]
     fn add_registers_with_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LD(0xD, 0x12).into()),
-            (2, LD(0xE, 0xFF).into()),
-            (4, ADD_REGISTERS(0xD, 0xE).into()),
+            (0, LD(r(0xD), 0x12).into()),
+            (2, LD(r(0xE), 0xFF).into()),
+            (4, ADD_REGISTERS(r(0xD), r(0xE)).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
