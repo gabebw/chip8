@@ -15,15 +15,15 @@ pub struct State {
     /// So, the main memory is from 0x200 to 0xFFF.
     memory: Vec<u8>,
     /// Chip-8 has 16 general purpose 8-bit registers, usually referred to as Vx, where x is a hexadecimal digit (0 through F).
-    pub(crate) registers: Vec<u8>,
+    registers: Vec<u8>,
     /// A 16-bit register called I. This register is generally used to
     /// store memory addresses, so only the lowest (rightmost) 12 bits
     /// are usually used.
     i: u16,
     /// Program counter
-    pub(crate) pc: u16,
+    pc: u16,
     /// Stack pointer
-    pub(crate) sp: u8,
+    sp: u8,
     /// The stack is an array of 16 16-bit values, used to store the address that
     /// the interpreter should return to when finished with a subroutine.
     /// Chip-8 allows for up to 16 levels of nested subroutines.
