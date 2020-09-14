@@ -76,6 +76,14 @@ pub enum Instruction {
     /// Adds the value kk to the value of register Vx, then stores the result in Vx.
     ADD(u8, u8),
 
+    /// Vx += Vy
+    /// Set Vx = Vx + Vy, set VF = carry.
+    /// The values of Vx and Vy are added together. If the result is greater than
+    /// 8 bits (i.e., > 255,) VF is set to 1, otherwise 0.
+    /// Only the lowest 8 bits of the result are kept, and stored in Vx.
+    #[allow(non_camel_case_types)]
+    ADD_REGISTERS(u8, u8),
+
     /// Set register I to nnn.
     LDI(Address),
 
@@ -108,6 +116,9 @@ impl Display for Instruction {
             SNE(register, byte) => write!(f, "SNE V{:X}, {:02X}", register, byte),
             LD(register, value) => write!(f, "LD V{:X}, {:02X}", register, value),
             ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register, addend),
+            ADD_REGISTERS(register_x, register_y) => {
+                write!(f, "ADD V{:X} += V{:X}", register_x, register_y)
+            }
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
             RND(register, byte) => write!(f, "RND V{:X}, {:02X}", register, byte),
             DRW(x, y, n) => write!(f, "DRW V{:X}, V{:X}, {:02X}", x, y, n),
@@ -149,6 +160,7 @@ impl TryFrom<&u16> for Instruction {
             0x4 => SNE(b, byte2),
             0x6 => LD(b, byte2),
             0x7 => ADD(b, byte2),
+            0x8 => ADD_REGISTERS(b, c),
             0xA => LDI(address(&chunk)?),
             0xC => RND(b, byte2),
             0xD => DRW(b, c, d),
@@ -179,6 +191,9 @@ impl Into<u16> for Instruction {
             SNE(register, byte) => 0x4000 + hundreds(register) + u16::from(byte),
             LD(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
             ADD(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
+            ADD_REGISTERS(register_x, register_y) => {
+                0x8000 + hundreds(register_x) + tens(register_y) + 0x4
+            }
             LDI(address) => 0xA000 + address.0,
             RND(register, byte) => 0xC000 + hundreds(register) + u16::from(byte),
             DRW(x, y, n) => 0xD000 + hundreds(x) + tens(y) + u16::from(n),
@@ -260,6 +275,11 @@ mod test {
     }
 
     #[test]
+    fn as_u16_add_registers() {
+        assert_eq!(into_u16(ADD_REGISTERS(0xA, 0xB)), 0x8AB4)
+    }
+
+    #[test]
     fn from_u16() {
         use std::collections::HashMap;
 
@@ -273,6 +293,7 @@ mod test {
             (0x4A56, SNE(0xA, 0x56)),
             (0x6003, LD(0x0, 0x03.try_into().unwrap())),
             (0x7123, ADD(0x1, 0x23)),
+            (0x8124, ADD_REGISTERS(0x1, 0x2)),
             (0xA278, LDI(0x278.try_into().unwrap())),
             (0xC123, RND(0x1, 0x23)),
             (0xD123, DRW(0x1, 0x2, 0x3)),

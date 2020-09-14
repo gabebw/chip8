@@ -217,10 +217,28 @@ fn execute<'a>(
             state.set_register(*register, addend + old_value);
             if verbosely {
                 println!(
-                    "\tChanged register V{:X} from {:04X} -> {:04X}",
+                    "\tChanged register V{:X} from {:02X} -> {:02X}",
                     register,
                     old_value,
                     addend + old_value
+                );
+            }
+        }
+        ADD_REGISTERS(register_x, register_y) => {
+            let value_x = state.get_register(*register_x);
+            let value_y = state.get_register(*register_y);
+            let (result, did_overflow) = value_x.overflowing_add(value_y);
+            if did_overflow {
+                state.set_register(0xF, 1);
+            }
+            state.set_register(*register_x, result);
+            if verbosely {
+                println!(
+                    "\tChanged register V{:X} from {:02X} -> {:02X} (VF = {})",
+                    register_x,
+                    value_x,
+                    result,
+                    if did_overflow { 1 } else { 0 }
                 );
             }
         }
@@ -510,5 +528,33 @@ mod test {
         for x in 1..8 {
             assert_eq!(state.buffer.get_pixel(x, 0), display::OFF);
         }
+    }
+
+    #[test]
+    fn add_registers_without_overflow() {
+        let mut state = build_state_with_program(&[
+            (0, LD(0xD, 0x12).into()),
+            (2, LD(0xE, 0x20).into()),
+            (4, ADD_REGISTERS(0xD, 0xE).into()),
+        ]);
+        for _ in 0..3 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+        assert_eq!(state.get_register(0xD), 0x12 + 0x20);
+        assert_eq!(state.get_register(0xF), 0);
+    }
+
+    #[test]
+    fn add_registers_with_overflow() {
+        let mut state = build_state_with_program(&[
+            (0, LD(0xD, 0x12).into()),
+            (2, LD(0xE, 0xFF).into()),
+            (4, ADD_REGISTERS(0xD, 0xE).into()),
+        ]);
+        for _ in 0..3 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+        assert_eq!(state.get_register(0xD), 0x11);
+        assert_eq!(state.get_register(0xF), 1);
     }
 }
