@@ -111,13 +111,6 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
                 execute(state, &instruction, Box::new(rng), verbosely)?;
                 display.draw(&state.buffer);
                 trace!("{}", state.buffer.pretty_print_physical());
-
-                if let DRW(_, _, _) = instruction {
-                    // Show the thing we just drew because otherwise it
-                    // disappears immediately when the program panics on an
-                    // instruction it doesn't understand
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                }
             }
             None => break,
         }

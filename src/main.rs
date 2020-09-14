@@ -45,6 +45,12 @@ fn main() -> Result<(), Chip8Error> {
             let mut state = State::with_program(&contents);
             interpreter::run(&mut state, true)?;
         }
+        Run { input_file_path } => {
+            let file = BufReader::new(File::open(input_file_path)?);
+            let contents = file.bytes().collect::<Result<Vec<u8>, std::io::Error>>()?;
+            let mut state = State::with_program(&contents);
+            interpreter::run(&mut state, false)?;
+        }
     };
     Ok(())
 }

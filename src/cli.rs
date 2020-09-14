@@ -25,6 +25,11 @@ pub enum Subcommand {
         #[structopt(parse(from_os_str))]
         input_file_path: PathBuf,
     },
+    #[structopt(about = "Run a program")]
+    Run {
+        #[structopt(parse(from_os_str))]
+        input_file_path: PathBuf,
+    },
 }
 
 pub fn install_logger(verbose: &mut Verbosity) {
