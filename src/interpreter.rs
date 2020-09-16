@@ -441,7 +441,7 @@ mod test {
     }
 
     #[test]
-    fn sne() {
+    fn sne_byte() {
         let mut state = build_state_with_program(&[
             (0, LDByte(r(0xD), 0x12).into()),
             (2, SNEByte(r(0xD), 0x00).into()),
@@ -457,7 +457,7 @@ mod test {
     }
 
     #[test]
-    fn se() {
+    fn se_byte() {
         let mut state = build_state_with_program(&[
             (0, LDByte(r(0xD), 0x12).into()),
             (2, SEByte(r(0xD), 0x12).into()),
@@ -467,6 +467,23 @@ mod test {
             (6, LDByte(r(0x1), 0xFF).into()),
         ]);
         for _ in 0..3 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+        assert_eq!(state.get_register(0x1), 0xFF);
+    }
+
+    #[test]
+    fn se_register() {
+        let mut state = build_state_with_program(&[
+            (0, LDByte(r(0xA), 0x12).into()),
+            (0, LDByte(r(0xB), 0x12).into()),
+            (2, SERegister(r(0xA), r(0xB)).into()),
+            // This should be skipped
+            (4, LDByte(r(0x1), 0x00).into()),
+            // This one should run
+            (6, LDByte(r(0x1), 0xFF).into()),
+        ]);
+        for _ in 0..4 {
             tick(&mut state, testing_rng()).unwrap();
         }
         assert_eq!(state.get_register(0x1), 0xFF);
