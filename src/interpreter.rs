@@ -368,7 +368,17 @@ mod test {
         program
     }
 
-    fn build_state_with_program(addresses_and_chunks: &[(usize, u16)]) -> State {
+    fn build_state_with_program(chunks: &[u16]) -> State {
+        // Every instruction is 2 bytes, so generate 0, 2, 4, etc
+        let addresses = (0..).filter(|x| x % 2 == 0).take(chunks.len());
+        let result = addresses.zip(chunks.iter().copied()).collect::<Vec<_>>();
+
+        State::with_program(&build_program(result.as_slice()))
+    }
+
+    fn build_state_with_program_with_custom_offsets(
+        addresses_and_chunks: &[(usize, u16)],
+    ) -> State {
         State::with_program(&build_program(addresses_and_chunks))
     }
 
@@ -381,7 +391,7 @@ mod test {
 
     #[test]
     fn sys_ignored_advances_pc() {
-        let mut state = build_state_with_program(&[(0, SYS().into())]);
+        let mut state = build_state_with_program(&[SYS().into()]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.pc, 0x202);
     }
@@ -392,7 +402,7 @@ mod test {
 
     #[test]
     fn call_subroutine_and_return() {
-        let mut state = build_state_with_program(&[
+        let mut state = build_state_with_program_with_custom_offsets(&[
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
             (0, CALL(Address::unwrapped(0x300)).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
@@ -412,21 +422,21 @@ mod test {
 
     #[test]
     fn jp_addr() {
-        let mut state = build_state_with_program(&[(0, JP(Address::unwrapped(0xBCD)).into())]);
+        let mut state = build_state_with_program(&[JP(Address::unwrapped(0xBCD)).into()]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.pc, 0xBCD);
     }
 
     #[test]
     fn ld_vx() {
-        let mut state = build_state_with_program(&[(0, LDByte(r(0xD), 0x12).into())]);
+        let mut state = build_state_with_program(&[LDByte(r(0xD), 0x12).into()]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x12);
     }
 
     #[test]
     fn ld_i() {
-        let mut state = build_state_with_program(&[(0, LDI(Address::unwrapped(0x400)).into())]);
+        let mut state = build_state_with_program(&[LDI(Address::unwrapped(0x400)).into()]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.i, 0x400);
     }
@@ -436,8 +446,8 @@ mod test {
         #[rustfmt::skip]
         let mut state =
             build_state_with_program(&[
-                (0, LDByte(r(0xD), 0x12).into()),
-                (2, ADDByte(r(0xD), 0x12).into())
+                LDByte(r(0xD), 0x12).into(),
+                ADDByte(r(0xD), 0x12).into()
             ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -449,8 +459,8 @@ mod test {
         #[rustfmt::skip]
         let mut state =
             build_state_with_program(&[
-                (0, LDByte(r(0xD), 0x12).into()),
-                (2, ADDByte(r(0xD), 0xFF).into())
+                LDByte(r(0xD), 0x12).into(),
+                ADDByte(r(0xD), 0xFF).into()
             ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -461,12 +471,12 @@ mod test {
     #[test]
     fn sne_byte() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xD), 0x12).into()),
-            (2, SNEByte(r(0xD), 0x00).into()),
+            LDByte(r(0xD), 0x12).into(),
+            SNEByte(r(0xD), 0x00).into(),
             // This should be skipped
-            (4, LDByte(r(0x1), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
             // This one should run
-            (6, LDByte(r(0x1), 0xFF).into()),
+            LDByte(r(0x1), 0xFF).into(),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -477,12 +487,12 @@ mod test {
     #[test]
     fn se_byte() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xD), 0x12).into()),
-            (2, SEByte(r(0xD), 0x12).into()),
+            LDByte(r(0xD), 0x12).into(),
+            SEByte(r(0xD), 0x12).into(),
             // This should be skipped
-            (4, LDByte(r(0x1), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
             // This one should run
-            (6, LDByte(r(0x1), 0xFF).into()),
+            LDByte(r(0x1), 0xFF).into(),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -493,13 +503,13 @@ mod test {
     #[test]
     fn se_register() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xA), 0x12).into()),
-            (2, LDByte(r(0xB), 0x12).into()),
-            (4, SERegister(r(0xA), r(0xB)).into()),
+            LDByte(r(0xA), 0x12).into(),
+            LDByte(r(0xB), 0x12).into(),
+            SERegister(r(0xA), r(0xB)).into(),
             // This should be skipped
-            (6, LDByte(r(0x1), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
             // This one should run
-            (8, LDByte(r(0x1), 0xFF).into()),
+            LDByte(r(0x1), 0xFF).into(),
         ]);
         for _ in 0..4 {
             tick(&mut state, testing_rng()).unwrap();
@@ -510,13 +520,13 @@ mod test {
     #[test]
     fn sne_register() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xA), 0x12).into()),
-            (2, LDByte(r(0xB), 0x12).into()),
-            (4, SNERegister(r(0xA), r(0xB)).into()),
+            LDByte(r(0xA), 0x12).into(),
+            LDByte(r(0xB), 0x12).into(),
+            SNERegister(r(0xA), r(0xB)).into(),
             // This should run
-            (6, LDByte(r(0x1), 0xFF).into()),
+            LDByte(r(0x1), 0xFF).into(),
             // This should not run
-            (8, LDByte(r(0x1), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
         ]);
         for _ in 0..4 {
             tick(&mut state, testing_rng()).unwrap();
@@ -528,8 +538,8 @@ mod test {
     fn rnd() {
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0x1), 0x00).into()),
-            (2, RND(r(0x1), 0xFF).into()),
+            LDByte(r(0x1), 0x00).into(),
+            RND(r(0x1), 0xFF).into(),
         ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -549,18 +559,18 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0x1), 0x00).into()),
-            (2, LDByte(r(0x2), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
+            LDByte(r(0x2), 0x00).into(),
             // Offset by 0x200 so we're indexing into program memory
-            (4, LDI(Address::unwrapped(0x200 + 12)).into()),
+            LDI(Address::unwrapped(0x200 + 12)).into(),
             // Draw sprite1
-            (6, DRW(r(0x1), r(0x2), 0x01).into()),
+            DRW(r(0x1), r(0x2), 0x01).into(),
             // Offset by 0x200 so we're indexing into program memory
-            (8, LDI(Address::unwrapped(0x200 + 13)).into()),
+            LDI(Address::unwrapped(0x200 + 13)).into(),
             // Draw sprite2
-            (10, DRW(r(0x1), r(0x2), 0x01).into()),
+            DRW(r(0x1), r(0x2), 0x01).into(),
             // Sprite1 is at 12 and sprite2 is at 13
-            (12, sprites_combined)
+            sprites_combined
         ]);
         for _ in 0..6 {
             tick(&mut state, testing_rng()).unwrap();
@@ -589,17 +599,17 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0x1), 0x00).into()),
-            (2, LDByte(r(0x2), 0x00).into()),
+            LDByte(r(0x1), 0x00).into(),
+            LDByte(r(0x2), 0x00).into(),
             // Offset by 0x200 so we're indexing into program memory
-            (4, LDI(Address::unwrapped(0x200 + 12)).into()),
+            LDI(Address::unwrapped(0x200 + 12)).into(),
             // Draw sprite (VF stays at 0, pixel changed from unset to set)
-            (6, DRW(r(0x1), r(0x2), 0x01).into()),
+            DRW(r(0x1), r(0x2), 0x01).into(),
             // Draw sprite (VF flips to 1, pixel changed from set to unset)
-            (8, DRW(r(0x1), r(0x2), 0x01).into()),
+            DRW(r(0x1), r(0x2), 0x01).into(),
             // Draw sprite (VF flips to 0, no pixel changed from set to unset)
-            (10, DRW(r(0x1), r(0x2), 0x01).into()),
-            (12, sprites_combined)
+            DRW(r(0x1), r(0x2), 0x01).into(),
+            sprites_combined
         ]);
         for _ in 0..6 {
             tick(&mut state, testing_rng()).unwrap();
@@ -615,9 +625,9 @@ mod test {
     #[test]
     fn add_registers_without_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xD), 0x12).into()),
-            (2, LDByte(r(0xE), 0x20).into()),
-            (4, ADDRegister(r(0xD), r(0xE)).into()),
+            LDByte(r(0xD), 0x12).into(),
+            LDByte(r(0xE), 0x20).into(),
+            ADDRegister(r(0xD), r(0xE)).into(),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -629,9 +639,9 @@ mod test {
     #[test]
     fn add_registers_with_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LDByte(r(0xD), 0x12).into()),
-            (2, LDByte(r(0xE), 0xFF).into()),
-            (4, ADDRegister(r(0xD), r(0xE)).into()),
+            LDByte(r(0xD), 0x12).into(),
+            LDByte(r(0xE), 0xFF).into(),
+            ADDRegister(r(0xD), r(0xE)).into(),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
