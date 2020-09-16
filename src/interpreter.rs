@@ -219,6 +219,24 @@ fn execute<'a>(
                 );
             }
         }
+        SNERegister(register_x, register_y) => {
+            let register_x_value = state.get_register(*register_x);
+            let register_y_value = state.get_register(*register_y);
+            if register_x_value != register_y_value {
+                state.pc += 2;
+                if verbosely {
+                    println!(
+                        "\tSkipping ahead, V{:X} != V{:X}",
+                        register_x.0, register_y.0
+                    );
+                }
+            } else if verbosely {
+                println!(
+                    "\tNot skipping, V{:X} is {:02X} (would skip if it were any other value)",
+                    register_x.0, register_x_value
+                );
+            }
+        }
         LDByte(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
@@ -476,12 +494,29 @@ mod test {
     fn se_register() {
         let mut state = build_state_with_program(&[
             (0, LDByte(r(0xA), 0x12).into()),
-            (0, LDByte(r(0xB), 0x12).into()),
-            (2, SERegister(r(0xA), r(0xB)).into()),
+            (2, LDByte(r(0xB), 0x12).into()),
+            (4, SERegister(r(0xA), r(0xB)).into()),
             // This should be skipped
-            (4, LDByte(r(0x1), 0x00).into()),
+            (6, LDByte(r(0x1), 0x00).into()),
             // This one should run
+            (8, LDByte(r(0x1), 0xFF).into()),
+        ]);
+        for _ in 0..4 {
+            tick(&mut state, testing_rng()).unwrap();
+        }
+        assert_eq!(state.get_register(0x1), 0xFF);
+    }
+
+    #[test]
+    fn sne_register() {
+        let mut state = build_state_with_program(&[
+            (0, LDByte(r(0xA), 0x12).into()),
+            (2, LDByte(r(0xB), 0x12).into()),
+            (4, SNERegister(r(0xA), r(0xB)).into()),
+            // This should run
             (6, LDByte(r(0x1), 0xFF).into()),
+            // This should not run
+            (8, LDByte(r(0x1), 0x00).into()),
         ]);
         for _ in 0..4 {
             tick(&mut state, testing_rng()).unwrap();
