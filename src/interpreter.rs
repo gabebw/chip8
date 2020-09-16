@@ -173,7 +173,7 @@ fn execute<'a>(
                 println!("\tChanged pc from {:04X} -> {:04X}", old_pc, state.pc);
             }
         }
-        SE(register, byte) => {
+        SEByte(register, byte) => {
             let register_value = state.get_register(*register);
             if register_value == *byte {
                 state.pc += 2;
@@ -187,7 +187,7 @@ fn execute<'a>(
                 );
             }
         }
-        SNE(register, byte) => {
+        SNEByte(register, byte) => {
             let register_value = state.get_register(*register);
             if register_value != *byte {
                 state.pc += 2;
@@ -201,13 +201,13 @@ fn execute<'a>(
                 );
             }
         }
-        LD(register, value) => {
+        LDByte(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
                 println!("\tSet register V{:X} to {:02X}", register.0, value);
             }
         }
-        ADD(register, addend) => {
+        ADDByte(register, addend) => {
             let old_value = state.get_register(*register);
             state.set_register(*register, addend + old_value);
             if verbosely {
@@ -219,7 +219,7 @@ fn execute<'a>(
                 );
             }
         }
-        ADD_REGISTERS(register_x, register_y) => {
+        ADDRegister(register_x, register_y) => {
             let value_x = state.get_register(*register_x);
             let value_y = state.get_register(*register_y);
             let (result, did_overflow) = value_x.overflowing_add(value_y);
@@ -361,7 +361,7 @@ mod test {
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
             (0, CALL(Address::unwrapped(0x300)).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
-            (0x100, LD(r(0x1), 0x20).into()),
+            (0x100, LDByte(r(0x1), 0x20).into()),
             // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
             (0x102, RET().into()),
         ]);
@@ -384,7 +384,7 @@ mod test {
 
     #[test]
     fn ld_vx() {
-        let mut state = build_state_with_program(&[(0, LD(r(0xD), 0x12).into())]);
+        let mut state = build_state_with_program(&[(0, LDByte(r(0xD), 0x12).into())]);
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x12);
     }
@@ -401,8 +401,8 @@ mod test {
         #[rustfmt::skip]
         let mut state =
             build_state_with_program(&[
-                (0, LD(r(0xD), 0x12).into()),
-                (2, ADD(r(0xD), 0x12).into())
+                (0, LDByte(r(0xD), 0x12).into()),
+                (2, ADDByte(r(0xD), 0x12).into())
             ]);
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
@@ -412,12 +412,12 @@ mod test {
     #[test]
     fn sne() {
         let mut state = build_state_with_program(&[
-            (0, LD(r(0xD), 0x12).into()),
-            (2, SNE(r(0xD), 0x00).into()),
+            (0, LDByte(r(0xD), 0x12).into()),
+            (2, SNEByte(r(0xD), 0x00).into()),
             // This should be skipped
-            (4, LD(r(0x1), 0x00).into()),
+            (4, LDByte(r(0x1), 0x00).into()),
             // This one should run
-            (6, LD(r(0x1), 0xFF).into()),
+            (6, LDByte(r(0x1), 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -428,12 +428,12 @@ mod test {
     #[test]
     fn se() {
         let mut state = build_state_with_program(&[
-            (0, LD(r(0xD), 0x12).into()),
-            (2, SE(r(0xD), 0x12).into()),
+            (0, LDByte(r(0xD), 0x12).into()),
+            (2, SEByte(r(0xD), 0x12).into()),
             // This should be skipped
-            (4, LD(r(0x1), 0x00).into()),
+            (4, LDByte(r(0x1), 0x00).into()),
             // This one should run
-            (6, LD(r(0x1), 0xFF).into()),
+            (6, LDByte(r(0x1), 0xFF).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -445,7 +445,7 @@ mod test {
     fn rnd() {
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(r(0x1), 0x00).into()),
+            (0, LDByte(r(0x1), 0x00).into()),
             (2, RND(r(0x1), 0xFF).into()),
         ]);
         tick(&mut state, testing_rng()).unwrap();
@@ -466,8 +466,8 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(r(0x1), 0x00).into()),
-            (2, LD(r(0x2), 0x00).into()),
+            (0, LDByte(r(0x1), 0x00).into()),
+            (2, LDByte(r(0x2), 0x00).into()),
             // Offset by 0x200 so we're indexing into program memory
             (4, LDI(Address::unwrapped(0x200 + 12)).into()),
             // Draw sprite1
@@ -506,8 +506,8 @@ mod test {
 
         #[rustfmt::skip]
         let mut state = build_state_with_program(&[
-            (0, LD(r(0x1), 0x00).into()),
-            (2, LD(r(0x2), 0x00).into()),
+            (0, LDByte(r(0x1), 0x00).into()),
+            (2, LDByte(r(0x2), 0x00).into()),
             // Offset by 0x200 so we're indexing into program memory
             (4, LDI(Address::unwrapped(0x200 + 12)).into()),
             // Draw sprite (VF stays at 0, pixel changed from unset to set)
@@ -532,9 +532,9 @@ mod test {
     #[test]
     fn add_registers_without_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LD(r(0xD), 0x12).into()),
-            (2, LD(r(0xE), 0x20).into()),
-            (4, ADD_REGISTERS(r(0xD), r(0xE)).into()),
+            (0, LDByte(r(0xD), 0x12).into()),
+            (2, LDByte(r(0xE), 0x20).into()),
+            (4, ADDRegister(r(0xD), r(0xE)).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();
@@ -546,9 +546,9 @@ mod test {
     #[test]
     fn add_registers_with_overflow() {
         let mut state = build_state_with_program(&[
-            (0, LD(r(0xD), 0x12).into()),
-            (2, LD(r(0xE), 0xFF).into()),
-            (4, ADD_REGISTERS(r(0xD), r(0xE)).into()),
+            (0, LDByte(r(0xD), 0x12).into()),
+            (2, LDByte(r(0xE), 0xFF).into()),
+            (4, ADDRegister(r(0xD), r(0xE)).into()),
         ]);
         for _ in 0..3 {
             tick(&mut state, testing_rng()).unwrap();

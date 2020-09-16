@@ -59,7 +59,6 @@ impl PartialEq<u16> for Address {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-#[allow(non_camel_case_types)]
 pub enum Instruction {
     /// Ignored
     SYS(),
@@ -78,24 +77,24 @@ pub enum Instruction {
     CALL(Address),
 
     /// Skip next instruction if Vx == kk.
-    SE(Register, u8),
+    SEByte(Register, u8),
 
     /// Skip next instruction if Vx != kk.
-    SNE(Register, u8),
+    SNEByte(Register, u8),
 
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
-    LD(Register, u8),
+    LDByte(Register, u8),
 
     /// Vx += kk
     /// Adds the value kk to the value of register Vx, then stores the result in Vx.
-    ADD(Register, u8),
+    ADDByte(Register, u8),
 
     /// Vx += Vy
     /// Set Vx = Vx + Vy, set VF = carry.
     /// The values of Vx and Vy are added together. If the result is greater than
     /// 8 bits (i.e., > 255,) VF is set to 1, otherwise 0.
     /// Only the lowest 8 bits of the result are kept, and stored in Vx.
-    ADD_REGISTERS(Register, Register),
+    ADDRegister(Register, Register),
 
     /// Set register I to nnn.
     LDI(Address),
@@ -125,11 +124,11 @@ impl Display for Instruction {
             RET() => write!(f, "RET"),
             JP(address) => write!(f, "JP {:02X}", address.0),
             CALL(address) => write!(f, "CALL {:02X}", address.0),
-            SE(register, byte) => write!(f, "SE V{:X}, {:02X}", register.0, byte),
-            SNE(register, byte) => write!(f, "SNE V{:X}, {:02X}", register.0, byte),
-            LD(register, value) => write!(f, "LD V{:X}, {:02X}", register.0, value),
-            ADD(register, addend) => write!(f, "ADD V{:X}, {:02X}", register.0, addend),
-            ADD_REGISTERS(register_x, register_y) => {
+            SEByte(register, byte) => write!(f, "SE V{:X}, {:02X}", register.0, byte),
+            SNEByte(register, byte) => write!(f, "SNE V{:X}, {:02X}", register.0, byte),
+            LDByte(register, byte) => write!(f, "LD V{:X}, {:02X}", register.0, byte),
+            ADDByte(register, byte) => write!(f, "ADD V{:X}, {:02X}", register.0, byte),
+            ADDRegister(register_x, register_y) => {
                 write!(f, "ADD V{:X} += V{:X}", register_x.0, register_y.0)
             }
             LDI(address) => write!(f, "LD I, {:02X}", address.0),
@@ -169,11 +168,11 @@ impl TryFrom<&u16> for Instruction {
             },
             0x1 => JP(address(&chunk)?),
             0x2 => CALL(address(&chunk)?),
-            0x3 => SE(Register(b), byte2),
-            0x4 => SNE(Register(b), byte2),
-            0x6 => LD(Register(b), byte2),
-            0x7 => ADD(Register(b), byte2),
-            0x8 => ADD_REGISTERS(Register(b), Register(c)),
+            0x3 => SEByte(Register(b), byte2),
+            0x4 => SNEByte(Register(b), byte2),
+            0x6 => LDByte(Register(b), byte2),
+            0x7 => ADDByte(Register(b), byte2),
+            0x8 => ADDRegister(Register(b), Register(c)),
             0xA => LDI(address(&chunk)?),
             0xC => RND(Register(b), byte2),
             0xD => DRW(Register(b), Register(c), d),
@@ -200,11 +199,11 @@ impl Into<u16> for Instruction {
             RET() => 0x00EE,
             JP(address) => 0x1000 + address.0,
             CALL(address) => 0x2000 + address.0,
-            SE(register, byte) => 0x3000 + hundreds(register) + u16::from(byte),
-            SNE(register, byte) => 0x4000 + hundreds(register) + u16::from(byte),
-            LD(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
-            ADD(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
-            ADD_REGISTERS(register_x, register_y) => {
+            SEByte(register, byte) => 0x3000 + hundreds(register) + u16::from(byte),
+            SNEByte(register, byte) => 0x4000 + hundreds(register) + u16::from(byte),
+            LDByte(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
+            ADDByte(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
+            ADDRegister(register_x, register_y) => {
                 0x8000 + hundreds(register_x) + tens(register_y) + 0x4
             }
             LDI(address) => 0xA000 + address.0,
@@ -252,23 +251,23 @@ mod test {
     }
 
     #[test]
-    fn as_u16_se() {
-        assert_eq!(into_u16(SE(r(0x4), 0x56)), 0x3456)
+    fn as_u16_se_byte() {
+        assert_eq!(into_u16(SEByte(r(0x4), 0x56)), 0x3456)
     }
 
     #[test]
-    fn as_u16_sne() {
-        assert_eq!(into_u16(SNE(r(0x5), 0x67)), 0x4567)
+    fn as_u16_sne_byte() {
+        assert_eq!(into_u16(SNEByte(r(0x5), 0x67)), 0x4567)
     }
 
     #[test]
-    fn as_u16_ld() {
-        assert_eq!(into_u16(LD(r(0x7), 0x89)), 0x6789);
+    fn as_u16_ld_byte() {
+        assert_eq!(into_u16(LDByte(r(0x7), 0x89)), 0x6789);
     }
 
     #[test]
-    fn as_u16_add() {
-        assert_eq!(into_u16(ADD(r(0x8), 0x9A)), 0x789A)
+    fn as_u16_add_byte() {
+        assert_eq!(into_u16(ADDByte(r(0x8), 0x9A)), 0x789A)
     }
 
     #[test]
@@ -293,7 +292,7 @@ mod test {
 
     #[test]
     fn as_u16_add_registers() {
-        assert_eq!(into_u16(ADD_REGISTERS(r(0xA), r(0xB))), 0x8AB4)
+        assert_eq!(into_u16(ADDRegister(r(0xA), r(0xB))), 0x8AB4)
     }
 
     #[test]
@@ -306,11 +305,11 @@ mod test {
             (0x0ABC, SYS()),
             (0x1A12, JP(0xA12.try_into().unwrap())),
             (0x221A, CALL(0x21A.try_into().unwrap())),
-            (0x3934, SE(r(0x9), 0x34)),
-            (0x4A56, SNE(r(0xA), 0x56)),
-            (0x6003, LD(r(0x0), 0x03.try_into().unwrap())),
-            (0x7123, ADD(r(0x1), 0x23)),
-            (0x8124, ADD_REGISTERS(r(0x1), r(0x2))),
+            (0x3934, SEByte(r(0x9), 0x34)),
+            (0x4A56, SNEByte(r(0xA), 0x56)),
+            (0x6003, LDByte(r(0x0), 0x03.try_into().unwrap())),
+            (0x7123, ADDByte(r(0x1), 0x23)),
+            (0x8124, ADDRegister(r(0x1), r(0x2))),
             (0xA278, LDI(0x278.try_into().unwrap())),
             (0xC123, RND(r(0x1), 0x23)),
             (0xD123, DRW(r(0x1), r(0x2), 0x3)),
