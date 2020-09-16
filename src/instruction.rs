@@ -82,6 +82,9 @@ pub enum Instruction {
     /// Skip next instruction if Vx != kk.
     SNEByte(Register, u8),
 
+    /// Skip next instruction if Vx == Vy.
+    SERegister(Register, Register),
+
     /// Set Vx = kk. The interpreter puts the value kk into register Vx.
     LDByte(Register, u8),
 
@@ -126,6 +129,9 @@ impl Display for Instruction {
             CALL(address) => write!(f, "CALL {:02X}", address.0),
             SEByte(register, byte) => write!(f, "SE V{:X}, {:02X}", register.0, byte),
             SNEByte(register, byte) => write!(f, "SNE V{:X}, {:02X}", register.0, byte),
+            SERegister(register_x, register_y) => {
+                write!(f, "SE V{:X}, V{:X}", register_x.0, register_y.0)
+            }
             LDByte(register, byte) => write!(f, "LD V{:X}, {:02X}", register.0, byte),
             ADDByte(register, byte) => write!(f, "ADD V{:X}, {:02X}", register.0, byte),
             ADDRegister(register_x, register_y) => {
@@ -170,6 +176,14 @@ impl TryFrom<&u16> for Instruction {
             0x2 => CALL(address(&chunk)?),
             0x3 => SEByte(Register(b), byte2),
             0x4 => SNEByte(Register(b), byte2),
+            0x5 => {
+                if d == 0 {
+                    // Chunk is 5bc0
+                    SERegister(Register(b), Register(c))
+                } else {
+                    UNKNOWN(*chunk)
+                }
+            }
             0x6 => LDByte(Register(b), byte2),
             0x7 => ADDByte(Register(b), byte2),
             0x8 => ADDRegister(Register(b), Register(c)),
@@ -201,6 +215,7 @@ impl Into<u16> for Instruction {
             CALL(address) => 0x2000 + address.0,
             SEByte(register, byte) => 0x3000 + hundreds(register) + u16::from(byte),
             SNEByte(register, byte) => 0x4000 + hundreds(register) + u16::from(byte),
+            SERegister(register_x, register_y) => 0x5000 + hundreds(register_x) + tens(register_y),
             LDByte(register, byte) => 0x6000 + hundreds(register) + u16::from(byte),
             ADDByte(register, byte) => 0x7000 + hundreds(register) + u16::from(byte),
             ADDRegister(register_x, register_y) => {
@@ -261,6 +276,11 @@ mod test {
     }
 
     #[test]
+    fn as_u16_se_register() {
+        assert_eq!(into_u16(SERegister(r(0xA), r(0xB))), 0x5AB0)
+    }
+
+    #[test]
     fn as_u16_ld_byte() {
         assert_eq!(into_u16(LDByte(r(0x7), 0x89)), 0x6789);
     }
@@ -307,6 +327,7 @@ mod test {
             (0x221A, CALL(0x21A.try_into().unwrap())),
             (0x3934, SEByte(r(0x9), 0x34)),
             (0x4A56, SNEByte(r(0xA), 0x56)),
+            (0x5730, SERegister(r(0x7), r(0x3))),
             (0x6003, LDByte(r(0x0), 0x03.try_into().unwrap())),
             (0x7123, ADDByte(r(0x1), 0x23)),
             (0x8124, ADDRegister(r(0x1), r(0x2))),

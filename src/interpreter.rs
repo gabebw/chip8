@@ -201,6 +201,24 @@ fn execute<'a>(
                 );
             }
         }
+        SERegister(register_x, register_y) => {
+            let register_x_value = state.get_register(*register_x);
+            let register_y_value = state.get_register(*register_y);
+            if register_x_value == register_y_value {
+                state.pc += 2;
+                if verbosely {
+                    println!(
+                        "\tSkipping ahead, V{:X} == V{:X}",
+                        register_x.0, register_y.0
+                    );
+                }
+            } else if verbosely {
+                println!(
+                    "\tNot skipping, V{:X} is {:02X} (would skip if it were {:02X})",
+                    register_x.0, register_x_value, register_y_value
+                );
+            }
+        }
         LDByte(register, value) => {
             state.set_register(*register, *value);
             if verbosely {
