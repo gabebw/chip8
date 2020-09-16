@@ -227,13 +227,12 @@ fn execute<'a>(
         }
         ADDByte(register, addend) => {
             let old_value = state.get_register(*register);
-            state.set_register(*register, addend + old_value);
+            let new_value = addend.wrapping_add(old_value);
+            state.set_register(*register, new_value);
             if verbosely {
                 println!(
                     "\tChanged register V{:X} from {:02X} -> {:02X}",
-                    register.0,
-                    old_value,
-                    addend + old_value
+                    register.0, old_value, new_value
                 );
             }
         }
@@ -415,7 +414,7 @@ mod test {
     }
 
     #[test]
-    fn add() {
+    fn add_byte() {
         #[rustfmt::skip]
         let mut state =
             build_state_with_program(&[
@@ -425,6 +424,20 @@ mod test {
         tick(&mut state, testing_rng()).unwrap();
         tick(&mut state, testing_rng()).unwrap();
         assert_eq!(state.get_register(0xD), 0x24);
+    }
+
+    #[test]
+    fn add_byte_with_overflow() {
+        #[rustfmt::skip]
+        let mut state =
+            build_state_with_program(&[
+                (0, LDByte(r(0xD), 0x12).into()),
+                (2, ADDByte(r(0xD), 0xFF).into())
+            ]);
+        tick(&mut state, testing_rng()).unwrap();
+        tick(&mut state, testing_rng()).unwrap();
+        // Expect it to wrap around
+        assert_eq!(state.get_register(0xD), 0x11);
     }
 
     #[test]
