@@ -35,7 +35,7 @@ fn main() -> Result<(), Chip8Error> {
             let contents = file.bytes().collect::<Result<Vec<u8>, std::io::Error>>()?;
             for mut multibytes in contents.as_slice().chunks_exact(2) {
                 let bytes = read_be_u16(&mut multibytes);
-                let instruction: Instruction = (&bytes).try_into()?;
+                let instruction: Instruction = bytes.try_into()?;
                 println!("{:04X} => {}", bytes, instruction);
             }
         }

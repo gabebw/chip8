@@ -1,35 +1,28 @@
 use crate::error::Chip8Error;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-
-/// Given the value 0xABCD, return 0xBCD.
-fn last_3_bits(bytes: &u16) -> u16 {
-    bytes & 0x0FFF
-}
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 /// An Address is a 12-bit value stored in a u16.
 pub struct Address(u16);
 
-impl Address {
-    #[cfg(test)]
-    pub fn unwrapped(chunk: u16) -> Self {
-        Self::try_from(chunk).unwrap()
+impl From<u16> for Address {
+    /// The address is a 12-bit value, meaning that its maximum value is 0x0FFF,
+    /// not 0xFFFF as the u16 type implies.
+    /// If passed a value larger than 0x0FFF, it will use only the last 3 bits.
+    fn from(chunk: u16) -> Self {
+        Self(chunk & 0x0FFF)
     }
 }
 
-impl TryFrom<u16> for Address {
-    type Error = Chip8Error;
-
-    /// The address is a 12-bit value, meaning that its maximum value is 0x0FFF,
-    /// not 0xFFFF as the u16 type implies.
-    /// It will panic if passed a value larger than 0x0FFF.
-    fn try_from(chunk: u16) -> Result<Self, Self::Error> {
-        if chunk > 0x0FFF {
-            Err(Chip8Error::NibbleTooLarge(chunk))
-        } else {
-            Ok(Self(chunk))
-        }
+// This makes it much easier to write tests, by allowing writing `0x32.into()`
+// (since `0x32` is detected as an i32 by default) rather than having to write
+// this clunky phrase: `(0x32 as u16).into()`.
+#[cfg(test)]
+impl From<i32> for Address {
+    fn from(chunk: i32) -> Self {
+        use std::convert::TryInto;
+        u16::try_from(chunk).unwrap().try_into().unwrap()
     }
 }
 
@@ -152,10 +145,6 @@ impl Display for Instruction {
     }
 }
 
-fn address(chunk: &u16) -> Result<Address, Chip8Error> {
-    last_3_bits(chunk).try_into()
-}
-
 /// Break a u8 like 0xAB into 0xA and 0xB
 fn nibbles(byte: u8) -> [u8; 2] {
     let a: u8 = byte >> 4;
@@ -163,13 +152,13 @@ fn nibbles(byte: u8) -> [u8; 2] {
     [a, b]
 }
 
-impl TryFrom<&u16> for Instruction {
+impl TryFrom<u16> for Instruction {
     type Error = Chip8Error;
 
-    fn try_from(chunk: &u16) -> Result<Self, Self::Error> {
+    fn try_from(chunk: u16) -> Result<Self, Self::Error> {
         use Instruction::*;
         // Convert a 2-byte value in the format 0xABCD into 0xA, 0xB, 0xC, and 0xD
-        let [byte1, byte2] = u16::to_be_bytes(*chunk);
+        let [byte1, byte2] = u16::to_be_bytes(chunk);
         let [a, b] = nibbles(byte1);
         let [c, d] = nibbles(byte2);
 
@@ -178,8 +167,8 @@ impl TryFrom<&u16> for Instruction {
                 0x00EE => RET(),
                 _ => SYS(),
             },
-            0x1 => JP(address(&chunk)?),
-            0x2 => CALL(address(&chunk)?),
+            0x1 => JP(chunk.into()),
+            0x2 => CALL(chunk.into()),
             0x3 => SEByte(Register(b), byte2),
             0x4 => SNEByte(Register(b), byte2),
             0x5 => {
@@ -187,7 +176,7 @@ impl TryFrom<&u16> for Instruction {
                     // Chunk is 5bc0
                     SERegister(Register(b), Register(c))
                 } else {
-                    UNKNOWN(*chunk)
+                    UNKNOWN(chunk)
                 }
             }
             0x6 => LDByte(Register(b), byte2),
@@ -198,14 +187,14 @@ impl TryFrom<&u16> for Instruction {
                     // Chunk is 9bc0
                     SNERegister(Register(b), Register(c))
                 } else {
-                    UNKNOWN(*chunk)
+                    UNKNOWN(chunk)
                 }
             }
-            0xA => LDI(address(&chunk)?),
+            0xA => LDI(chunk.into()),
             0xC => RND(Register(b), byte2),
             0xD => DRW(Register(b), Register(c), d),
             0xF => ADDI(Register(b)),
-            _ => UNKNOWN(*chunk),
+            _ => UNKNOWN(chunk),
         };
         Ok(instruction)
     }
@@ -268,12 +257,12 @@ mod test {
 
     #[test]
     fn as_u16_jp() {
-        assert_eq!(into_u16(JP(Address::unwrapped(0x234))), 0x1234)
+        assert_eq!(into_u16(JP(0x234.into())), 0x1234)
     }
 
     #[test]
     fn as_u16_call() {
-        assert_eq!(into_u16(CALL(Address::unwrapped(0x345))), 0x2345)
+        assert_eq!(into_u16(CALL(0x345.into())), 0x2345)
     }
 
     fn r(n: u8) -> Register {
@@ -312,7 +301,7 @@ mod test {
 
     #[test]
     fn as_u16_ldi() {
-        assert_eq!(into_u16(LDI(Address::unwrapped(0xBCD))), 0xABCD)
+        assert_eq!(into_u16(LDI(0xBCD.into())), 0xABCD)
     }
 
     #[test]
@@ -343,23 +332,23 @@ mod test {
         let instructions: HashMap<u16, Instruction> = [
             (0x00EE, RET()),
             (0x0ABC, SYS()),
-            (0x1A12, JP(0xA12.try_into().unwrap())),
-            (0x221A, CALL(0x21A.try_into().unwrap())),
+            (0x1A12, JP(0xA12.into())),
+            (0x221A, CALL(0x21A.into())),
             (0x3934, SEByte(r(0x9), 0x34)),
             (0x4A56, SNEByte(r(0xA), 0x56)),
             (0x5730, SERegister(r(0x7), r(0x3))),
-            (0x6003, LDByte(r(0x0), 0x03.try_into().unwrap())),
+            (0x6003, LDByte(r(0x0), 0x03)),
             (0x7123, ADDByte(r(0x1), 0x23)),
             (0x8124, ADDRegister(r(0x1), r(0x2))),
             (0x9AB0, SNERegister(r(0xA), r(0xB))),
-            (0xA278, LDI(0x278.try_into().unwrap())),
+            (0xA278, LDI(0x278.into())),
             (0xC123, RND(r(0x1), 0x23)),
             (0xD123, DRW(r(0x1), r(0x2), 0x3)),
             (0xF51E, ADDI(r(0x5)))
         ].iter().cloned().collect();
 
         for (chunk, instruction) in instructions.into_iter() {
-            let actual = Instruction::try_from(&chunk).unwrap();
+            let actual = Instruction::try_from(chunk).unwrap();
             assert_eq!(actual, instruction);
         }
     }

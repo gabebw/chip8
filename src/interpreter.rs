@@ -108,7 +108,7 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
             Some(chunk) => {
                 // Advance by 2 bytes since 1 chunk is 2 bytes
                 state.pc += 2;
-                let instruction = Instruction::try_from(&chunk)?;
+                let instruction = Instruction::try_from(chunk)?;
                 execute(state, &instruction, Box::new(rng), verbosely)?;
                 display.draw(&state.buffer);
                 trace!("{}", state.buffer.pretty_print_physical());
@@ -126,7 +126,7 @@ fn tick(state: &mut State, rng: Box<dyn RngCore>) -> Result<&mut State, Chip8Err
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
     state.pc += 2;
-    let instruction = Instruction::try_from(&chunk)?;
+    let instruction = Instruction::try_from(chunk)?;
     execute(state, &instruction, rng, false)?;
     Ok(state)
 }
@@ -346,7 +346,7 @@ fn execute<'a>(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{display, instruction::Address};
+    use crate::display;
 
     // Build a program by inserting u16s (as u8s) at the given address and
     // address+1, with everything else filled with zeroes.
@@ -411,7 +411,7 @@ mod test {
     fn call_subroutine_and_return() {
         let program = &[
             // CALL: Increment SP, put current PC (0x200 + 2 = 0x202) on top of stack, set PC to 0x300
-            (0, CALL(Address::unwrapped(0x300)).into()),
+            (0, CALL(0x300.into()).into()),
             // At 0x100 (+ 0x200 = 0x300 in the total program memory), do LD 1, 20
             (0x100, LDByte(r(0x1), 0x20).into()),
             // Now RET(urn): Set PC to top of stack (0x202) substract 1 from SP
@@ -430,7 +430,7 @@ mod test {
 
     #[test]
     fn jp_addr() {
-        let state = run(&[JP(Address::unwrapped(0xBCD)).into()]);
+        let state = run(&[JP(0xBCD.into()).into()]);
         assert_eq!(state.pc, 0xBCD);
     }
 
@@ -442,7 +442,7 @@ mod test {
 
     #[test]
     fn ld_i() {
-        let state = run(&[LDI(Address::unwrapped(0x400)).into()]);
+        let state = run(&[LDI(0x400.into()).into()]);
         assert_eq!(state.i, 0x400);
     }
 
@@ -545,17 +545,17 @@ mod test {
         #[rustfmt::skip]
         let state = run(&[
             // Jump past the sprites
-            JP(Address::unwrapped(0x200 + 4)).into(),
+            JP((0x200 + 4).into()).into(),
             // Sprite1 is at 0x200 + 2 and sprite2 is at 0x200 + 3
             sprites_combined,
             LDByte(r(0x1), 0x00).into(), // x coordinate to draw at
             LDByte(r(0x2), 0x00).into(), // y coordinate to draw at
             // Point I at sprite 1
-            LDI(Address::unwrapped(0x200 + 2)).into(),
+            LDI((0x200 + 2).into()).into(),
             // Draw sprite1 at (V1, V2)
             DRW(r(0x1), r(0x2), 0x01).into(),
             // Point I at sprite 2
-            LDI(Address::unwrapped(0x200 + 3)).into(),
+            LDI((0x200 + 3).into()).into(),
             // Draw sprite2 at (V1, V2)
             DRW(r(0x1), r(0x2), 0x01).into(),
         ]);
@@ -583,13 +583,13 @@ mod test {
 
         let state = run(&[
             // Jump past the sprites
-            JP(Address::unwrapped(0x200 + 4)).into(),
+            JP((0x200 + 4).into()).into(),
             // Sprite1 is at 0x200 + 2 and sprite2 is at 0x200 + 3
             sprites_combined,
             LDByte(r(0x1), 0x00).into(), // x coordinate to draw at
             LDByte(r(0x2), 0x00).into(), // y coordinate to draw at
             // Point I at sprite 1
-            LDI(Address::unwrapped(0x200 + 2)).into(),
+            LDI((0x200 + 2).into()).into(),
             // Draw sprite (VF stays at 0, pixel changed from unset to set)
             DRW(r(0x1), r(0x2), 0x01).into(),
             // Draw sprite (VF flips to 1, pixel changed from set to unset)
