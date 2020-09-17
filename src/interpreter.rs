@@ -122,7 +122,7 @@ pub fn run(state: &mut State, verbosely: bool) -> Result<&mut State, Chip8Error>
 // Do one thing in the interpreter (run one instruction) and return the changed state.
 // Useful for testing.
 #[cfg(test)]
-fn tick(state: &mut State, rng: Box<dyn RngCore>) -> Result<&mut State, Chip8Error> {
+fn tick(state: &mut State, rng: impl RngCore) -> Result<&mut State, Chip8Error> {
     let chunk = state.next_chunk().unwrap();
     // Advance by 2 bytes since 1 chunk is 2 bytes
     state.pc += 2;
@@ -135,7 +135,7 @@ fn tick(state: &mut State, rng: Box<dyn RngCore>) -> Result<&mut State, Chip8Err
 fn execute<'a>(
     state: &'a mut State,
     instruction: &Instruction,
-    mut rng: Box<dyn RngCore>,
+    mut rng: impl RngCore,
     verbosely: bool,
 ) -> Result<&'a mut State, Chip8Error> {
     if verbosely {
@@ -391,10 +391,9 @@ mod test {
     }
 
     // A random-number generator with a pre-determined seed.
-    fn testing_rng() -> Box<dyn RngCore> {
+    fn testing_rng() -> impl RngCore {
         use rand::SeedableRng;
-        let rng = rand::rngs::StdRng::seed_from_u64(0);
-        Box::new(rng)
+        rand::rngs::StdRng::seed_from_u64(0)
     }
 
     #[test]
